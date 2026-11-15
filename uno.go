@@ -24,5 +24,5 @@ func DecodeFile(filePath string, out any) error {
 	}
 	defer f.Close()
 
-	return NewDecoder(f).Decode(&out)
+	return NewDecoder(f).Decode(out)
 }
