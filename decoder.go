@@ -6,7 +6,6 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"time"
 )
 
 type Decoder struct {
@@ -79,38 +78,33 @@ func (dec *Decoder) decode(value reflect.Value, ident int) (unprocessedRow *reco
 			}
 			continue
 		} else if row.Key != "" && row.Value != "" {
-			field := value.FieldByName(row.Key)
-			if !field.IsValid() {
-				return nil, fmt.Errorf("field %s is not exists in destination", row.Key)
-			}
+			if value.Kind() == reflect.Struct {
+				field := value.FieldByName(row.Key)
+				if !field.IsValid() {
+					return nil, fmt.Errorf("field %s is not exists in destination", row.Key)
+				}
+				if !field.CanSet() {
+					return nil, fmt.Errorf("field %s is not settable", field.Type().Name())
+				}
 
-			f, ok := valParseFuncs[field.Kind()]
-			if ok {
-				v, err := f(row)
+				v, err := row.decodeValue(field.Type())
 				if err != nil {
 					return nil, err
 				}
 				field.Set(reflect.ValueOf(v))
-				continue
-			}
-
-			if field.Type().Name() == "Time" {
-				valueReady := false
-				for _, layout := range []string{time.RFC3339Nano, time.RFC3339, time.DateOnly, time.TimeOnly} {
-					t, err := time.Parse(layout, row.Value)
-					if err == nil {
-						field.Set(reflect.ValueOf(t))
-						valueReady = true
-						break
-					}
+			} else if value.Kind() == reflect.Map {
+				if value.Type().Key().Kind() != reflect.String {
+					return nil, fmt.Errorf("only string keys supported in maps, got %s", value.Type().Key().String())
 				}
-				if !valueReady {
-					return nil, fmt.Errorf("unsupported time layout: %s", row.Value)
+				if value.IsNil() {
+					value.Set(reflect.MakeMap(value.Type()))
 				}
-				continue
+				v, err := row.decodeValue(value.Type().Elem())
+				if err != nil {
+					return nil, err
+				}
+				value.SetMapIndex(reflect.ValueOf(row.Key), reflect.ValueOf(v))
 			}
-
-			return nil, fmt.Errorf("unsupported type: %s", field.Kind())
 		}
 	}
 	return nil, err

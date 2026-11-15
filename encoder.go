@@ -65,7 +65,14 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error
 				return err
 			}
 		}
-
+	case reflect.Map:
+		fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
+		for _, key := range val.MapKeys() {
+			err := enc.encode(key.String(), val.MapIndex(key), level+1)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

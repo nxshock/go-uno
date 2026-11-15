@@ -3,7 +3,11 @@ package uno
 import (
 	"fmt"
 	"io"
+	"math/bits"
+	"reflect"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type record struct {
@@ -137,4 +141,48 @@ func parseRecord(s string, comment string) (*record, error) {
 		Comment:    comment}
 
 	return rec, nil
+}
+
+func (r *record) decodeValue(valType reflect.Type) (any, error) {
+	switch valType.Kind() {
+	case reflect.Struct:
+		if valType.String() == "time.Time" {
+			for _, layout := range []string{time.RFC3339Nano, time.RFC3339, time.DateOnly, time.TimeOnly} {
+				t, err := time.ParseInLocation(layout, r.Value, time.Local)
+				if err == nil {
+					return t, err
+				}
+			}
+			return nil, fmt.Errorf("unsupported time layout: %s", r.Value)
+		}
+	case reflect.Int:
+		i, err := strconv.ParseInt(r.Value, 10, bits.UintSize)
+		return int(i), err
+	case reflect.Int64:
+		return strconv.ParseInt(r.Value, 10, 64)
+	case reflect.Float64:
+		return strconv.ParseFloat(r.Value, 64)
+	case reflect.Uint:
+		i, err := strconv.ParseUint(r.Value, 10, bits.UintSize)
+		return uint(i), err
+	case reflect.Uint64:
+		return strconv.ParseUint(r.Value, 10, 64)
+	case reflect.Bool:
+		if r.Delimiter != delimiterTyped {
+			return false, fmt.Errorf("delimiter is not typed")
+		}
+
+		switch r.Value {
+		case "true", "on", "open", "yes":
+			return true, nil
+		case "false", "off", "close", "no":
+			return false, nil
+		}
+
+		return false, fmt.Errorf("wrong bool value: %s", r.Value)
+	case reflect.String:
+		return r.Value, nil
+	}
+
+	return nil, fmt.Errorf("unsupported type: %s", valType.String())
 }

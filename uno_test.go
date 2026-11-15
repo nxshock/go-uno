@@ -1,7 +1,6 @@
 package uno
 
 import (
-	"log"
 	"math"
 	"reflect"
 	"testing"
@@ -61,7 +60,7 @@ func TestParseString(t *testing.T) {
 	for _, test := range tests {
 		row, err := parseRecord(test.s, "")
 		assert.NoError(t, err)
-		v, err := valParseFuncs[reflect.String](row)
+		v, err := row.decodeValue(reflect.TypeOf(""))
 		assert.Equal(t, test.expected, v)
 	}
 }
@@ -85,7 +84,7 @@ func TestParseBool(t *testing.T) {
 	for _, test := range tests {
 		row, err := parseRecord(test.s, "")
 		assert.NoError(t, err)
-		v, err := valParseFuncs[reflect.Bool](row)
+		v, err := row.decodeValue(reflect.TypeOf(false))
 		assert.NoError(t, err)
 		assert.Equal(t, test.expected, v)
 	}
@@ -111,7 +110,7 @@ func TestParseFloat64(t *testing.T) {
 	for _, test := range tests {
 		row, err := parseRecord(test.s, "")
 		assert.NoError(t, err)
-		v, err := valParseFuncs[reflect.Float64](row)
+		v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 		assert.NoError(t, err)
 		assert.Equal(t, test.expected, v)
 	}
@@ -127,14 +126,14 @@ func TestParseFloat64(t *testing.T) {
 	for _, test := range infTests {
 		row, err := parseRecord(test.s, "")
 		assert.NoError(t, err)
-		v, err := valParseFuncs[reflect.Float64](row)
+		v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 		assert.NoError(t, err)
 		assert.True(t, math.IsInf(v.(float64), test.sign))
 	}
 
 	row, err := parseRecord("key= nan", "")
 	assert.NoError(t, err)
-	v, err := valParseFuncs[reflect.Float64](row)
+	v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 	assert.NoError(t, err)
 	assert.True(t, math.IsNaN(v.(float64)))
 }
@@ -159,8 +158,7 @@ func TestUnmarshal(t *testing.T) {
 Uint=    2
 Float64= 0.3
 Bool=    true
-String:  string
-`
+String:  string`
 
 	type S struct {
 		Int     int
@@ -293,8 +291,8 @@ func TestComment(t *testing.T) {
 	}
 
 	str := `// Comment line
-Key: Value
-`
+Key: Value`
+
 	expected := S{Key: "Value"}
 
 	got := S{}
@@ -310,8 +308,8 @@ func TestMultilineComment(t *testing.T) {
 
 	str := `// Comment line 1
 // Comment line 2
-Key: Value
-`
+Key: Value`
+
 	expected := S{Key: "Value"}
 
 	got := S{}
@@ -335,8 +333,8 @@ func TestUnmarshalStruct(t *testing.T) {
 Nested:
 	Str: 456
 Nested2:
-	Str: 789
-`
+	Str: 789`
+
 	s := S{}
 	expected := S{Int: 123, Nested: Nested{"456"}, Nested2: Nested{"789"}}
 
@@ -345,14 +343,98 @@ Nested2:
 	assert.Equal(t, expected, s)
 }
 
-func TestTest(t *testing.T) {
-	bytes := []byte("A= 123\nB: 456")
+func TestMarshalMap(t *testing.T) {
+	type S struct {
+		StringMap map[string]string
+		IntMap    map[string]int
+	}
 
-	var s = struct {
-		A int
-		B string
-	}{}
+	var tests = []struct {
+		s        S
+		expected string
+	}{
+		{s: S{StringMap: map[string]string{"Key1": "Value1", "Key2": "Value2"}, IntMap: map[string]int{"Key1": 123, "Key2": 456}},
+			expected: `StringMap:
+	Key1: Value1
+	Key2: Value2
+IntMap:
+	Key1= 123
+	Key2= 456
+`}}
 
-	Unmarshal(bytes, &s)
-	log.Printf("%+v", s)
+	for _, test := range tests {
+		got, err := Marshal(test.s)
+		assert.NoError(t, err)
+		assert.Equal(t, test.expected, string(got))
+	}
+}
+
+func TestUnmarshalMap(t *testing.T) {
+	type S struct {
+		StringMap map[string]string
+		IntMap    map[string]int
+	}
+
+	var tests = []struct {
+		str      string
+		expected S
+	}{
+		{str: `StringMap:
+	Key1: Value1
+	Key2: Value2
+IntMap:
+	Key1= 123
+	Key2= 456`, expected: S{StringMap: map[string]string{"Key1": "Value1", "Key2": "Value2"}, IntMap: map[string]int{"Key1": 123, "Key2": 456}}}}
+
+	for _, test := range tests {
+		got := S{}
+		err := Unmarshal([]byte(test.str), &got)
+		assert.NoError(t, err)
+		assert.Equal(t, test.expected, got)
+	}
+}
+
+func TestUnmarshalTime(t *testing.T) {
+	type S struct {
+		Key time.Time
+	}
+
+	var tests = []struct {
+		str      string
+		expected S
+	}{
+		{str: "Key: 2006-05-04", expected: S{Key: time.Date(2006, 5, 4, 0, 0, 0, 0, time.Local)}},
+		{str: "Key: 15:02:01", expected: S{Key: time.Date(0, 1, 1, 15, 2, 1, 0, time.Local)}},
+	}
+
+	for _, test := range tests {
+		got := S{}
+
+		err := Unmarshal([]byte(test.str), &got)
+		assert.NoError(t, err)
+		assert.Equal(t, test.expected, got)
+	}
+}
+
+func TestMarshalUnmarshalMap(t *testing.T) {
+	type S struct {
+		StringMap map[string]string
+		IntMap    map[string]int
+	}
+
+	var tests = []struct {
+		s S
+	}{
+		{s: S{StringMap: map[string]string{"Key1": "Value1", "Key2": "Value2"}, IntMap: map[string]int{"Key1": 123, "Key2": 456}}}}
+
+	for _, test := range tests {
+		b, err := Marshal(test.s)
+		assert.NoError(t, err)
+
+		newS := S{}
+		err = Unmarshal(b, &newS)
+		assert.NoError(t, err)
+
+		assert.Equal(t, test.s, newS)
+	}
 }
