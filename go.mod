@@ -1,4 +1,4 @@
-module nowork/uno
+module github.com/nxshock/gonx
 
 go 1.27.3
 
