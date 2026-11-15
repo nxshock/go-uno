@@ -1,4 +1,4 @@
-module github.com/nxshock/gonx
+module github.com/nxshock/go-uno
 
 go 1.26
 
