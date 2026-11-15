@@ -4,16 +4,23 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 )
 
 type Encoder struct {
 	w io.Writer
+
+	SortMapKeys bool
 }
 
 func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{w}
+	enc := Encoder{
+		w:           w,
+		SortMapKeys: true}
+
+	return &enc
 }
 
 func (enc *Encoder) Encode(in any) error {
@@ -67,7 +74,11 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error
 		}
 	case reflect.Map:
 		fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
-		for _, key := range val.MapKeys() {
+		keys := val.MapKeys()
+		if enc.SortMapKeys {
+			sort.Sort(sortKeys(keys))
+		}
+		for _, key := range keys {
 			err := enc.encode(key.String(), val.MapIndex(key), level+1)
 			if err != nil {
 				return err

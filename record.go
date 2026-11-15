@@ -10,6 +10,32 @@ import (
 	"time"
 )
 
+type directive rune
+
+const (
+	directiveNone       = directive(' ')
+	directiveMetadata   = directive('#')
+	directiveAssembly   = directive('@')
+	directiveValidation = directive('$')
+)
+
+type itemMarker rune
+
+const (
+	itemMarkerNone   = itemMarker(' ')
+	itemMarkerString = itemMarker('-')
+	itemMarkerTyped  = itemMarker('=')
+	itemMarkerStruct = itemMarker('.')
+)
+
+type delimiter rune
+
+const (
+	delimiterNone   = delimiter(' ')
+	delimiterString = delimiter(':')
+	delimiterTyped  = delimiter('=')
+)
+
 type record struct {
 	Indent     int
 	Directive  directive
@@ -144,6 +170,10 @@ func parseRecord(s string, comment string) (*record, error) {
 }
 
 func (r *record) decodeValue(valType reflect.Type) (any, error) {
+	if valType.Kind() == reflect.Pointer {
+		valType = valType.Elem()
+	}
+
 	switch valType.Kind() {
 	case reflect.Struct:
 		if valType.String() == "time.Time" {

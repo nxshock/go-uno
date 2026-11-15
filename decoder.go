@@ -91,7 +91,7 @@ func (dec *Decoder) decode(value reflect.Value, ident int) (unprocessedRow *reco
 				if err != nil {
 					return nil, err
 				}
-				field.Set(reflect.ValueOf(v))
+				setValue(field, v)
 			} else if value.Kind() == reflect.Map {
 				if value.Type().Key().Kind() != reflect.String {
 					return nil, fmt.Errorf("only string keys supported in maps, got %s", value.Type().Key().String())
@@ -116,6 +116,20 @@ func (dec *Decoder) Decode(out any) (err error) {
 		e = e.Elem()
 	}
 
+	if e.Kind() != reflect.Struct {
+		return fmt.Errorf("can unmarshal only to %s, got %s", reflect.Struct, e.Kind().String())
+	}
+
 	_, err = dec.decode(e, 0)
 	return err
+}
+
+func setValue(field reflect.Value, value any) {
+	if field.Kind() == reflect.Pointer {
+		v := reflect.New(field.Type().Elem())
+		v.Elem().Set(reflect.ValueOf(value))
+		field.Set(v)
+	} else {
+		field.Set(reflect.ValueOf(value))
+	}
 }

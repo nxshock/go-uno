@@ -438,3 +438,66 @@ func TestMarshalUnmarshalMap(t *testing.T) {
 		assert.Equal(t, test.s, newS)
 	}
 }
+
+func TestUnmarshalToWrongType(t *testing.T) {
+	s := 0
+
+	err := Unmarshal([]byte(""), &s)
+	assert.Error(t, err)
+}
+
+func TestUnmarshalPointers(t *testing.T) {
+	type S struct {
+		Str   *string
+		Int   *int
+		Float *float64
+		Time  *time.Time
+	}
+
+	str := `Str: 123
+	Int= 456
+	Float= 0.789
+	Time= 2006-05-04`
+
+	pStr := "123"
+	pInt := 456
+	pFloat := 0.789
+	pTime := time.Date(2006, 5, 4, 0, 0, 0, 0, time.Local)
+	expected := S{Str: &pStr, Int: &pInt, Float: &pFloat, Time: &pTime}
+
+	var got S
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.EqualValues(t, expected, got)
+}
+
+func TestMarshalUnmarshalPointers(t *testing.T) {
+	type S struct {
+		Str   *string
+		Int   *int
+		Float *float64
+		Time  *time.Time
+	}
+
+	pStr := "123"
+	pInt := 456
+	pFloat := 0.789
+	pTime := time.Date(2006, 5, 4, 0, 0, 0, 0, time.Local)
+
+	tests := []struct {
+		s S
+	}{
+		{s: S{Str: &pStr, Int: &pInt, Float: &pFloat, Time: &pTime}},
+	}
+
+	for _, test := range tests {
+		b, err := Marshal(test.s)
+		assert.NoError(t, err)
+
+		newS := S{}
+		err = Unmarshal(b, &newS)
+		assert.NoError(t, err)
+
+		assert.EqualValues(t, test.s, newS)
+	}
+}
