@@ -188,13 +188,34 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 	case reflect.Int:
 		i, err := strconv.ParseInt(r.Value, 10, bits.UintSize)
 		return int(i), err
+	case reflect.Int8:
+		i, err := strconv.ParseInt(r.Value, 10, 8)
+		return int8(i), err
+	case reflect.Int16:
+		i, err := strconv.ParseInt(r.Value, 10, 16)
+		return int16(i), err
+	case reflect.Int32:
+		i, err := strconv.ParseInt(r.Value, 10, 32)
+		return int32(i), err
 	case reflect.Int64:
 		return strconv.ParseInt(r.Value, 10, 64)
+	case reflect.Float32:
+		f, err := strconv.ParseFloat(r.Value, 32)
+		return float32(f), err
 	case reflect.Float64:
 		return strconv.ParseFloat(r.Value, 64)
 	case reflect.Uint:
 		i, err := strconv.ParseUint(r.Value, 10, bits.UintSize)
 		return uint(i), err
+	case reflect.Uint8:
+		u, err := strconv.ParseUint(r.Value, 10, 8)
+		return uint8(u), err
+	case reflect.Uint16:
+		u, err := strconv.ParseUint(r.Value, 10, 16)
+		return uint16(u), err
+	case reflect.Uint32:
+		u, err := strconv.ParseUint(r.Value, 10, 32)
+		return uint32(u), err
 	case reflect.Uint64:
 		return strconv.ParseUint(r.Value, 10, 64)
 	case reflect.Bool:

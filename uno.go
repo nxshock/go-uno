@@ -13,5 +13,5 @@ func Marshal(in any) (out []byte, err error) {
 
 	err = NewEncoder(buf).Encode(in)
 
-	return buf.Bytes(), nil
+	return buf.Bytes(), err
 }

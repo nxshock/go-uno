@@ -214,7 +214,16 @@ Time= 2006-05-04T03:02:01+05:00
 func TestMarshalUnmarshal(t *testing.T) {
 	type S struct {
 		Int     int
+		Int8    int8
+		Int16   int16
+		Int32   int32
+		Int64   int64
 		Uint    uint
+		Uint8   uint8
+		Uint16  uint16
+		Uint32  uint32
+		Uint64  uint64
+		Float32 float32
 		Float64 float64
 		Bool    bool
 		String  string
@@ -222,9 +231,18 @@ func TestMarshalUnmarshal(t *testing.T) {
 	}
 
 	s := S{
-		Int:     1,
-		Uint:    2,
-		Float64: 0.3,
+		Int:     -1,
+		Int8:    -2,
+		Int16:   -3,
+		Int32:   -4,
+		Int64:   -5,
+		Uint:    6,
+		Uint8:   7,
+		Uint16:  8,
+		Uint32:  9,
+		Uint64:  10,
+		Float32: -0.11,
+		Float64: -0.12,
 		Bool:    true,
 		String:  "string",
 		Time:    time.Date(2006, 5, 4, 3, 2, 1, 0, time.Local)}
