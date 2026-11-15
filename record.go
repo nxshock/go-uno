@@ -1,6 +1,7 @@
 package uno
 
 import (
+	"encoding"
 	"fmt"
 	"io"
 	"math/bits"
@@ -170,6 +171,14 @@ func parseRecord(s string, comment string) (*record, error) {
 }
 
 func (r *record) decodeValue(valType reflect.Type) (any, error) {
+	if valType.String() != "time.Time" {
+		val := reflect.New(valType).Interface()
+		if f, ok := val.(encoding.TextUnmarshaler); ok {
+			err := f.UnmarshalText([]byte(r.Value))
+			return f, err
+		}
+	}
+
 	if valType.Kind() == reflect.Pointer {
 		valType = valType.Elem()
 	}
@@ -178,7 +187,7 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 	case reflect.Struct:
 		if valType.String() == "time.Time" {
 			for _, layout := range []string{time.RFC3339Nano, time.RFC3339, time.DateOnly, time.TimeOnly} {
-				t, err := time.ParseInLocation(layout, r.Value, time.Local)
+				t, err := time.Parse(layout, r.Value)
 				if err == nil {
 					return t, err
 				}

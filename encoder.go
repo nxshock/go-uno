@@ -1,6 +1,7 @@
 package uno
 
 import (
+	"encoding"
 	"fmt"
 	"io"
 	"reflect"
@@ -39,8 +40,25 @@ func (enc *Encoder) Encode(in any) error {
 	return nil
 }
 
+func structPointer(obj any) any {
+	vp := reflect.New(reflect.TypeOf(obj))
+	vp.Elem().Set(reflect.ValueOf(obj))
+	return vp.Interface()
+}
+
 func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error {
-	if val.Kind() == reflect.Pointer {
+	if val.Type().String() != "time.Time" {
+		if f, ok := structPointer(val.Interface()).(encoding.TextMarshaler); ok {
+			b, err := f.MarshalText()
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterString), string(b))
+			return nil
+		}
+	}
+
+	for val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 

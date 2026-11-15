@@ -1,8 +1,11 @@
 package uno
 
 import (
+	"fmt"
 	"math"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -195,7 +198,7 @@ func TestMarshal(t *testing.T) {
 		Float64: 0.3,
 		Bool:    true,
 		String:  "string",
-		Time:    time.Date(2006, 5, 4, 3, 2, 1, 0, time.Local),
+		Time:    time.Date(2006, 5, 4, 3, 2, 1, 0, time.UTC),
 	}
 
 	expected := `Int= 1
@@ -203,7 +206,7 @@ Uint= 2
 Float64= 0.3
 Bool= true
 String: string
-Time= 2006-05-04T03:02:01+05:00
+Time= 2006-05-04T03:02:01Z
 `
 
 	b, err := Marshal(&s)
@@ -245,7 +248,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 		Float64: -0.12,
 		Bool:    true,
 		String:  "string",
-		Time:    time.Date(2006, 5, 4, 3, 2, 1, 0, time.Local)}
+		Time:    time.Date(2006, 5, 4, 3, 2, 1, 0, time.UTC)}
 
 	b, err := Marshal(s)
 	assert.NoError(t, err)
@@ -421,8 +424,8 @@ func TestUnmarshalTime(t *testing.T) {
 		str      string
 		expected S
 	}{
-		{str: "Key: 2006-05-04", expected: S{Key: time.Date(2006, 5, 4, 0, 0, 0, 0, time.Local)}},
-		{str: "Key: 15:02:01", expected: S{Key: time.Date(0, 1, 1, 15, 2, 1, 0, time.Local)}},
+		{str: "Key: 2006-05-04", expected: S{Key: time.Date(2006, 5, 4, 0, 0, 0, 0, time.UTC)}},
+		{str: "Key: 15:02:01", expected: S{Key: time.Date(0, 1, 1, 15, 2, 1, 0, time.UTC)}},
 	}
 
 	for _, test := range tests {
@@ -480,7 +483,7 @@ func TestUnmarshalPointers(t *testing.T) {
 	pStr := "123"
 	pInt := 456
 	pFloat := 0.789
-	pTime := time.Date(2006, 5, 4, 0, 0, 0, 0, time.Local)
+	pTime := time.Date(2006, 5, 4, 0, 0, 0, 0, time.UTC)
 	expected := S{Str: &pStr, Int: &pInt, Float: &pFloat, Time: &pTime}
 
 	var got S
@@ -500,7 +503,7 @@ func TestMarshalUnmarshalPointers(t *testing.T) {
 	pStr := "123"
 	pInt := 456
 	pFloat := 0.789
-	pTime := time.Date(2006, 5, 4, 0, 0, 0, 0, time.Local)
+	pTime := time.Date(2006, 5, 4, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		s S
@@ -518,4 +521,47 @@ func TestMarshalUnmarshalPointers(t *testing.T) {
 
 		assert.EqualValues(t, test.s, newS)
 	}
+}
+
+type field int
+
+func (f *field) MarshalText() (text []byte, err error) {
+	return fmt.Appendf(nil, "^%d^", *f), nil
+}
+
+func (f *field) UnmarshalText(text []byte) error {
+	i, err := strconv.Atoi(strings.Trim(string(text), "^"))
+	if err != nil {
+		return err
+	}
+
+	*f = field(i)
+
+	return nil
+}
+
+func TestMarshaler(t *testing.T) {
+	type S struct {
+		F field
+	}
+
+	i := 123
+
+	b, err := Marshal(S{F: field(i)})
+	assert.NoError(t, err)
+	assert.Equal(t, "F: ^123^\n", string(b))
+}
+
+func TestUnmarshaler(t *testing.T) {
+	type S struct {
+		F field
+	}
+
+	str := "F: ^123^\n"
+
+	s := S{}
+
+	err := Unmarshal([]byte(str), &s)
+	assert.NoError(t, err)
+	assert.Equal(t, S{F: field(123)}, s)
 }
