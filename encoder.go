@@ -88,7 +88,10 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error
 		fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
 
 		for i := range val.Len() {
-			enc.encode("", val.Index(i), level)
+			err := enc.encode("", val.Index(i), level)
+			if err != nil {
+				return err
+			}
 		}
 	case reflect.Struct:
 		fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
