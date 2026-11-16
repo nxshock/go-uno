@@ -45,9 +45,11 @@ type record struct {
 	Delimiter  delimiter
 	Value      string
 	Comment    string
+
+	lineNumber uint
 }
 
-func parseRecord(s string, comment string) (*record, error) {
+func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
 	r := strings.NewReader(s)
 
 	// indent
@@ -170,7 +172,8 @@ func parseRecord(s string, comment string) (*record, error) {
 		Key:        key,
 		Value:      value,
 		Delimiter:  delim,
-		Comment:    comment}
+		Comment:    comment,
+		lineNumber: lineNumber}
 
 	return rec, nil
 }
@@ -234,7 +237,7 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 		return strconv.ParseUint(r.Value, 10, 64)
 	case reflect.Bool:
 		if r.Delimiter != delimiterTyped {
-			return false, fmt.Errorf("delimiter is not typed")
+			return false, fmt.Errorf("line %d: %w", r.lineNumber, ErrDelimiterIsNotTypedForBool)
 		}
 
 		switch r.Value {
@@ -244,10 +247,10 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 			return false, nil
 		}
 
-		return false, fmt.Errorf("%w: \"%s\"", ErrWrongBoolValue, r.Value)
+		return false, fmt.Errorf("line %d: %w: \"%s\"", r.lineNumber, ErrWrongBoolValue, r.Value)
 	case reflect.String:
 		return r.Value, nil
 	}
 
-	return nil, fmt.Errorf("unsupported type: %s", valType.String())
+	return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrUnsupportedType, valType.String())
 }

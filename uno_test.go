@@ -18,17 +18,17 @@ func TestParseRow(t *testing.T) {
 		expected record
 	}{
 		// test keys https://uno.mudrium.ru/uno_core/oblast_klyucha.html
-		{s: "'': val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "", Delimiter: delimiterString, Value: "val"}},
-		{s: "key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "key", Delimiter: delimiterString, Value: "val"}},
-		{s: "n_key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n_key", Delimiter: delimiterString, Value: "val"}},
-		{s: "n-key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n-key", Delimiter: delimiterString, Value: "val"}},
-		{s: "-key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "-key", Delimiter: delimiterString, Value: "val"}},
-		{s: "n key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n key", Delimiter: delimiterString, Value: "val"}},
-		{s: "1234: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "1234", Delimiter: delimiterString, Value: "val"}},
+		{s: "'': val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
+		{s: "key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
+		{s: "n_key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n_key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
+		{s: "n-key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n-key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
+		{s: "-key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "-key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
+		{s: "n key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
+		{s: "1234: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "1234", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 	}
 
 	for _, test := range tests {
-		got, err := parseRecord(test.s, "")
+		got, err := parseRecord(test.s, "", 1)
 		assert.NoError(t, err)
 		assert.Equal(t, test.expected, *got)
 	}
@@ -39,12 +39,12 @@ func TestListItem(t *testing.T) {
 		s        string
 		expected record
 	}{
-		{s: "- text", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerArrayString, Key: "", Delimiter: delimiterNone, Value: "text"}},
-		{s: "= 129.56", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerArrayTyped, Key: "", Delimiter: delimiterNone, Value: "129.56"}},
+		{s: "- text", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerArrayString, Key: "", Delimiter: delimiterNone, Value: "text", lineNumber: 1}},
+		{s: "= 129.56", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerArrayTyped, Key: "", Delimiter: delimiterNone, Value: "129.56", lineNumber: 1}},
 	}
 
 	for _, test := range tests {
-		got, err := parseRecord(test.s, "")
+		got, err := parseRecord(test.s, "", 1)
 		assert.NoError(t, err)
 		assert.Equal(t, test.expected, *got)
 	}
@@ -61,7 +61,7 @@ func TestParseString(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		row, err := parseRecord(test.s, "")
+		row, err := parseRecord(test.s, "", 1)
 		assert.NoError(t, err)
 		v, err := row.decodeValue(reflect.TypeOf(""))
 		assert.Equal(t, test.expected, v)
@@ -85,7 +85,7 @@ func TestParseBool(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		row, err := parseRecord(test.s, "")
+		row, err := parseRecord(test.s, "", 1)
 		assert.NoError(t, err)
 		v, err := row.decodeValue(reflect.TypeOf(false))
 		assert.NoError(t, err)
@@ -111,7 +111,7 @@ func TestParseFloat64(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		row, err := parseRecord(test.s, "")
+		row, err := parseRecord(test.s, "", 1)
 		assert.NoError(t, err)
 		v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 		assert.NoError(t, err)
@@ -127,14 +127,14 @@ func TestParseFloat64(t *testing.T) {
 	}
 
 	for _, test := range infTests {
-		row, err := parseRecord(test.s, "")
+		row, err := parseRecord(test.s, "", 1)
 		assert.NoError(t, err)
 		v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 		assert.NoError(t, err)
 		assert.True(t, math.IsInf(v.(float64), test.sign))
 	}
 
-	row, err := parseRecord("key= nan", "")
+	row, err := parseRecord("key= nan", "", 1)
 	assert.NoError(t, err)
 	v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 	assert.NoError(t, err)
@@ -149,9 +149,10 @@ func TestParseObject(t *testing.T) {
 		ItemMarker: itemMarkerNone,
 		Key:        "object",
 		Delimiter:  delimiterString,
-		Value:      ""}
+		Value:      "",
+		lineNumber: 1}
 
-	row, err := parseRecord(s, "")
+	row, err := parseRecord(s, "", 1)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, *row)
 }
@@ -579,7 +580,7 @@ func TestDontAllowSpaceInKeys(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		_, err := parseRecord(test.s, "")
+		_, err := parseRecord(test.s, "", 1)
 		assert.ErrorIs(t, err, test.expectedErr)
 	}
 }
@@ -618,4 +619,19 @@ func TestBool(t *testing.T) {
 		assert.ErrorIs(t, err, test.expectedErr)
 		assert.Equal(t, test.expectedValue, s.B)
 	}
+}
+
+func TestErrLineNumbers(t *testing.T) {
+	type S struct {
+		F1 string
+		F2 bool
+	}
+
+	str := `F1: value1
+F2: true`
+
+	s := S{}
+	err := Unmarshal([]byte(str), &s)
+	assert.ErrorIs(t, err, ErrDelimiterIsNotTypedForBool)
+	assert.True(t, strings.HasPrefix(err.Error(), "line 2: "))
 }

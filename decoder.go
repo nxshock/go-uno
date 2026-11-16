@@ -15,12 +15,15 @@ type Decoder struct {
 }
 
 type rowReader struct {
-	r *bufio.Reader
+	r          *bufio.Reader
+	lineNumber uint
 }
 
 func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 	var s string
 	for {
+		r.lineNumber += 1
+
 		s, err = r.r.ReadString('\n')
 		if err == io.EOF {
 			if s == "" {
@@ -47,7 +50,7 @@ func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 			continue
 		}
 
-		return parseRecord(s, comment)
+		return parseRecord(s, comment, r.lineNumber)
 	}
 }
 
@@ -60,12 +63,12 @@ func NewDecoder(r io.Reader) *Decoder {
 
 func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker itemMarker, nextRec *record) (unprocessedRow *record, err error) {
 	for {
-		var row *record
+		var rec *record
 		if nextRec != nil {
-			row = nextRec
+			rec = nextRec
 			nextRec = nil
 		} else {
-			row, err = dec.r.ReadRecord("")
+			rec, err = dec.r.ReadRecord("")
 			if err == io.EOF {
 				return nil, nil
 			} else if err != nil {
@@ -73,16 +76,16 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 			}
 		}
 
-		if row.Indent < ident || parentItemMarker != row.ItemMarker { // TODO: implement mixed type arrays
-			return row, nil
+		if rec.Indent < ident || parentItemMarker != rec.ItemMarker { // TODO: implement mixed type arrays
+			return rec, nil
 		}
 
-		if row.Key != "" && row.Value == "" && row.Delimiter == delimiterString {
+		if rec.Key != "" && rec.Value == "" && rec.Delimiter == delimiterString {
 			// New field with types: struct, array, map
 
-			field := value.FieldByName(row.Key)
+			field := value.FieldByName(rec.Key)
 			if !field.IsValid() {
-				return nil, fmt.Errorf("field %s is not exists in destination", row.Key) // TODO: add option to skip fields
+				return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key) // TODO: add option to skip fields
 			}
 
 			nextRec, err = dec.r.ReadRecord("")
@@ -107,19 +110,19 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 					return nil, err
 				}
 			}
-		} else if row.Key != "" && row.Value != "" {
+		} else if rec.Key != "" && rec.Value != "" {
 			// New field with simple value
 
 			if value.Kind() == reflect.Struct {
-				field := value.FieldByName(row.Key)
+				field := value.FieldByName(rec.Key)
 				if !field.IsValid() {
-					return nil, fmt.Errorf("field %s is not exists in destination", row.Key) // TODO: add option to skip fields
+					return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key) // TODO: add option to skip fields
 				}
 				if !field.CanSet() {
-					return nil, fmt.Errorf("field %s is not settable", field.Type().Name())
+					return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotSettable, field.Type().Name())
 				}
 
-				v, err := row.decodeValue(field.Type())
+				v, err := rec.decodeValue(field.Type())
 				if err != nil {
 					return nil, err
 				}
@@ -128,16 +131,16 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 				}
 			} else if value.Kind() == reflect.Map {
 				if value.Type().Key().Kind() != reflect.String {
-					return nil, fmt.Errorf("only string keys supported in maps, got %s", value.Type().Key().String())
+					return nil, fmt.Errorf("line %d: %w, got %s", rec.lineNumber, ErrMapKeyIsNotString, value.Type().Key().String())
 				}
 				if value.IsNil() {
 					value.Set(reflect.MakeMap(value.Type()))
 				}
-				v, err := row.decodeValue(value.Type().Elem())
+				v, err := rec.decodeValue(value.Type().Elem())
 				if err != nil {
 					return nil, err
 				}
-				value.SetMapIndex(reflect.ValueOf(row.Key), reflect.ValueOf(v))
+				value.SetMapIndex(reflect.ValueOf(rec.Key), reflect.ValueOf(v))
 			}
 		}
 	}
