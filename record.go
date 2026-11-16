@@ -84,6 +84,8 @@ func parseRecord(s string, comment string) (*record, error) {
 				return nil, fmt.Errorf("unread directive: %v", err)
 			}
 		}
+	} else {
+		return nil, ErrSpaceInKey
 	}
 
 	// item marker
@@ -144,6 +146,9 @@ func parseRecord(s string, comment string) (*record, error) {
 		}
 	}
 	key := keyBuilder.String()
+	if strings.HasSuffix(key, " ") {
+		return nil, ErrSpaceInKey
+	}
 	if key == "''" {
 		key = ""
 	}

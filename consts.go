@@ -1,6 +1,9 @@
 package uno
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 var defaultDecoderTimeLayouts = []string{
 	time.RFC3339Nano,
@@ -9,3 +12,7 @@ var defaultDecoderTimeLayouts = []string{
 	time.TimeOnly}
 
 var defaultEncoderTimeLayout = time.RFC3339
+
+var (
+	ErrSpaceInKey = errors.New("spaces is not allowed in keys")
+)

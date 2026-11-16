@@ -567,3 +567,19 @@ func TestUnmarshaler(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, S{F: field(123)}, s)
 }
+
+func TestDontAllowSpaceInKeys(t *testing.T) {
+	tests := []struct {
+		s           string
+		expectedErr error
+	}{
+		{s: " key: val", expectedErr: ErrSpaceInKey},
+		{s: "key : val", expectedErr: ErrSpaceInKey},
+		{s: " key : val", expectedErr: ErrSpaceInKey},
+	}
+
+	for _, test := range tests {
+		_, err := parseRecord(test.s, "")
+		assert.ErrorIs(t, err, test.expectedErr)
+	}
+}

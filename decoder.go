@@ -18,7 +18,7 @@ type rowReader struct {
 	r *bufio.Reader
 }
 
-func (r *rowReader) ReadRow(comment string) (rec *record, err error) {
+func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 	var s string
 	for {
 		s, err = r.r.ReadString('\n')
@@ -65,7 +65,7 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 			row = nextRec
 			nextRec = nil
 		} else {
-			row, err = dec.r.ReadRow("")
+			row, err = dec.r.ReadRecord("")
 			if err == io.EOF {
 				return nil, nil
 			} else if err != nil {
@@ -73,7 +73,7 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 			}
 		}
 
-		if row.Indent < ident || parentItemMarker != row.ItemMarker { // TODO: может поменяться, если массив разных типов
+		if row.Indent < ident || parentItemMarker != row.ItemMarker { // TODO: implement mixed type arrays
 			return row, nil
 		}
 
@@ -82,12 +82,12 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 
 			field := value.FieldByName(row.Key)
 			if !field.IsValid() {
-				return nil, fmt.Errorf("field %s is not exists in destination", row.Key)
+				return nil, fmt.Errorf("field %s is not exists in destination", row.Key) // TODO: add option to skip fields
 			}
 
-			nextRec, err = dec.r.ReadRow("")
+			nextRec, err = dec.r.ReadRecord("")
 			if err != nil {
-				return nil, err // TODO: whick kind of error can be?
+				return nil, err // TODO: which kind of error can be?
 			}
 			switch nextRec.ItemMarker {
 			case itemMarkerMap:
@@ -113,7 +113,7 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 			if value.Kind() == reflect.Struct {
 				field := value.FieldByName(row.Key)
 				if !field.IsValid() {
-					return nil, fmt.Errorf("field %s is not exists in destination", row.Key)
+					return nil, fmt.Errorf("field %s is not exists in destination", row.Key) // TODO: add option to skip fields
 				}
 				if !field.CanSet() {
 					return nil, fmt.Errorf("field %s is not settable", field.Type().Name())
@@ -168,7 +168,6 @@ func setValue(field reflect.Value, value any) {
 			field.Set(reflect.ValueOf(value).Elem())
 		} else {
 			field.Set(reflect.ValueOf(value))
-
 		}
 	}
 }
