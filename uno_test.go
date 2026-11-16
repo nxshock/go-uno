@@ -39,8 +39,8 @@ func TestListItem(t *testing.T) {
 		s        string
 		expected record
 	}{
-		{s: "- text", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerString, Key: "", Delimiter: delimiterNone, Value: "text"}},
-		{s: "= 129.56", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerTyped, Key: "", Delimiter: delimiterNone, Value: "129.56"}},
+		{s: "- text", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerArrayString, Key: "", Delimiter: delimiterNone, Value: "text"}},
+		{s: "= 129.56", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerArrayTyped, Key: "", Delimiter: delimiterNone, Value: "129.56"}},
 	}
 
 	for _, test := range tests {
@@ -378,11 +378,11 @@ func TestMarshalMap(t *testing.T) {
 	}{
 		{s: S{StringMap: map[string]string{"Key1": "Value1", "Key2": "Value2"}, IntMap: map[string]int{"Key1": 123, "Key2": 456}},
 			expected: `StringMap:
-	Key1: Value1
-	Key2: Value2
+. Key1: Value1
+. Key2: Value2
 IntMap:
-	Key1= 123
-	Key2= 456
+. Key1= 123
+. Key2= 456
 `}}
 
 	for _, test := range tests {
@@ -403,11 +403,11 @@ func TestUnmarshalMap(t *testing.T) {
 		expected S
 	}{
 		{str: `StringMap:
-	Key1: Value1
-	Key2: Value2
+. Key1: Value1
+. Key2: Value2
 IntMap:
-	Key1= 123
-	Key2= 456`, expected: S{StringMap: map[string]string{"Key1": "Value1", "Key2": "Value2"}, IntMap: map[string]int{"Key1": 123, "Key2": 456}}}}
+. Key1= 123
+. Key2= 456`, expected: S{StringMap: map[string]string{"Key1": "Value1", "Key2": "Value2"}, IntMap: map[string]int{"Key1": 123, "Key2": 456}}}}
 
 	for _, test := range tests {
 		got := S{}

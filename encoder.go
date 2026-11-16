@@ -6,7 +6,6 @@ import (
 	"io"
 	"reflect"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -33,7 +32,7 @@ func (enc *Encoder) Encode(in any) error {
 	}
 
 	for field, value := range e.Fields() {
-		err := enc.encode(field.Name, value, 0)
+		err := enc.encode(field.Name, value, "")
 		if err != nil {
 			return err
 		}
@@ -48,14 +47,14 @@ func structPointer(obj any) any {
 	return vp.Interface()
 }
 
-func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error {
+func (enc *Encoder) encode(fieldName string, val reflect.Value, prefix string) error {
 	if val.Type().String() != "time.Time" {
 		if f, ok := structPointer(val.Interface()).(encoding.TextMarshaler); ok {
 			b, err := f.MarshalText()
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterString), string(b))
+			fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterString), string(b))
 			return nil
 		}
 	}
@@ -66,49 +65,49 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error
 
 	switch val.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterTyped), val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterTyped), val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.Float32, reflect.Float64:
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterTyped), val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.Bool:
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterTyped), val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.String:
 		delimiter := string(delimiterString)
 		if fieldName == "" {
 			delimiter = "-"
 		}
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, delimiter, val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, delimiter, val.Interface())
 	case reflect.Slice:
-		fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
+		fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
 
 		for i := range val.Len() {
-			err := enc.encode("", val.Index(i), level)
+			err := enc.encode("", val.Index(i), prefix)
 			if err != nil {
 				return err
 			}
 		}
 	case reflect.Struct:
 		if val.Type().String() == "time.Time" {
-			fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterTyped), val.Interface().(time.Time).Format(time.RFC3339Nano))
+			fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface().(time.Time).Format(time.RFC3339Nano))
 			return nil
 		} else {
-			fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
+			fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
 			for field, value := range val.Fields() {
-				err := enc.encode(field.Name, value, level+1)
+				err := enc.encode(field.Name, value, prefix+"\t")
 				if err != nil {
 					return err
 				}
 			}
 		}
 	case reflect.Map:
-		fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
+		fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
 		keys := val.MapKeys()
 		if enc.SortMapKeys {
 			sort.Sort(sortKeys(keys))
 		}
 		for _, key := range keys {
-			err := enc.encode(key.String(), val.MapIndex(key), level+1)
+			err := enc.encode(key.String(), val.MapIndex(key), prefix+". ")
 			if err != nil {
 				return err
 			}

@@ -23,10 +23,10 @@ const (
 type itemMarker rune
 
 const (
-	itemMarkerNone   = itemMarker(' ')
-	itemMarkerString = itemMarker('-')
-	itemMarkerTyped  = itemMarker('=')
-	itemMarkerStruct = itemMarker('.')
+	itemMarkerNone        = itemMarker(' ')
+	itemMarkerArrayString = itemMarker('-')
+	itemMarkerArrayTyped  = itemMarker('=')
+	itemMarkerMap         = itemMarker('.')
 )
 
 type delimiter rune
@@ -94,7 +94,7 @@ func parseRecord(s string, comment string) (*record, error) {
 		return nil, fmt.Errorf("read item marker: %v", err)
 	}
 	switch itemMarker(ch) {
-	case itemMarkerString, itemMarkerTyped, itemMarkerStruct:
+	case itemMarkerArrayString, itemMarkerArrayTyped, itemMarkerMap:
 		itmMarker = itemMarker(ch)
 		ch, _, err = r.ReadRune()
 		if err != nil {
@@ -114,7 +114,7 @@ func parseRecord(s string, comment string) (*record, error) {
 
 	// key and delim
 	delim := delimiter(' ')
-	if itmMarker == itemMarkerNone {
+	if itmMarker == itemMarkerNone || itmMarker == itemMarkerMap {
 		for {
 			brk := false
 			ch, _, err = r.ReadRune()

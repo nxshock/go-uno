@@ -58,13 +58,12 @@ func NewDecoder(r io.Reader) *Decoder {
 	}
 }
 
-func (dec *Decoder) decode(value reflect.Value, ident int) (unprocessedRow *record, err error) {
-	var firstRow *record
+func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker itemMarker, nextRec *record) (unprocessedRow *record, err error) {
 	for {
 		var row *record
-		if firstRow != nil {
-			row = firstRow
-			firstRow = nil
+		if nextRec != nil {
+			row = nextRec
+			nextRec = nil
 		} else {
 			row, err = dec.r.ReadRow("")
 			if err == io.EOF {
@@ -74,22 +73,43 @@ func (dec *Decoder) decode(value reflect.Value, ident int) (unprocessedRow *reco
 			}
 		}
 
-		if row.Indent < ident {
+		if row.Indent < ident || parentItemMarker != row.ItemMarker { // TODO: может поменяться, если массив разных типов
 			return row, nil
 		}
 
 		if row.Key != "" && row.Value == "" && row.Delimiter == delimiterString {
+			// New field with types: struct, array, map
+
 			field := value.FieldByName(row.Key)
 			if !field.IsValid() {
 				return nil, fmt.Errorf("field %s is not exists in destination", row.Key)
 			}
 
-			firstRow, err = dec.decode(field, ident+1)
+			nextRec, err = dec.r.ReadRow("")
 			if err != nil {
-				return nil, err
+				return nil, err // TODO: whick kind of error can be?
 			}
-			continue
+			switch nextRec.ItemMarker {
+			case itemMarkerMap:
+				nextRec, err = dec.decode(field, ident, itemMarkerMap, nextRec)
+				if err != nil {
+					return nil, err
+				}
+			case itemMarkerArrayString, itemMarkerArrayTyped:
+				nextRec, err = dec.decode(field, ident, itemMarkerArrayString, nextRec) // TODO: implement mixed type arrays
+				if err != nil {
+					return nil, err
+				}
+				continue
+			default:
+				nextRec, err = dec.decode(field, ident+1, itemMarkerNone, nextRec)
+				if err != nil {
+					return nil, err
+				}
+			}
 		} else if row.Key != "" && row.Value != "" {
+			// New field with simple value
+
 			if value.Kind() == reflect.Struct {
 				field := value.FieldByName(row.Key)
 				if !field.IsValid() {
@@ -134,7 +154,7 @@ func (dec *Decoder) Decode(out any) (err error) {
 		return fmt.Errorf("can unmarshal only to %s, got %s", reflect.Struct, e.Kind().String())
 	}
 
-	_, err = dec.decode(e, 0)
+	_, err = dec.decode(e, 0, itemMarkerNone, nil)
 	return err
 }
 
