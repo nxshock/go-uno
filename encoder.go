@@ -64,11 +64,6 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error
 		val = val.Elem()
 	}
 
-	if val.Type().Name() == "Time" {
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterTyped), val.Interface().(time.Time).Format(time.RFC3339Nano))
-		return nil
-	}
-
 	switch val.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterTyped), val.Interface())
@@ -94,11 +89,16 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error
 			}
 		}
 	case reflect.Struct:
-		fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
-		for field, value := range val.Fields() {
-			err := enc.encode(field.Name, value, level+1)
-			if err != nil {
-				return err
+		if val.Type().String() == "time.Time" {
+			fmt.Fprintf(enc.w, "%s%s%s %v\n", strings.Repeat("\t", level), fieldName, string(delimiterTyped), val.Interface().(time.Time).Format(time.RFC3339Nano))
+			return nil
+		} else {
+			fmt.Fprintf(enc.w, "%s%s:\n", strings.Repeat("\t", level), fieldName)
+			for field, value := range val.Fields() {
+				err := enc.encode(field.Name, value, level+1)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	case reflect.Map:
@@ -114,7 +114,7 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, level int) error
 			}
 		}
 	default:
-		return fmt.Errorf("unsupported type for encoding: %s", val.Kind().String())
+		return fmt.Errorf("unsupported type for encoding: %s", val.Type().String())
 	}
 
 	return nil
