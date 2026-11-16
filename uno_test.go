@@ -351,8 +351,10 @@ func TestUnmarshalStruct(t *testing.T) {
 	}
 
 	str := `Int= 123
+
 Nested:
 	Str: 456
+
 Nested2:
 	Str: 789`
 

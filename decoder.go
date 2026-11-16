@@ -16,30 +16,37 @@ type rowReader struct {
 	r *bufio.Reader
 }
 
-func (r *rowReader) ReadRow(comment string) (*record, error) {
-	s, err := r.r.ReadString('\n')
-	if err == io.EOF {
-		if s == "" {
-			return nil, io.EOF
+func (r *rowReader) ReadRow(comment string) (rec *record, err error) {
+	var s string
+	for {
+		s, err = r.r.ReadString('\n')
+		if err == io.EOF {
+			if s == "" {
+				return nil, io.EOF
+			}
+		} else if err != nil {
+			return nil, err
 		}
-	} else if err != nil {
-		return nil, err
-	}
 
-	if len(s) > 0 && s[len(s)-1] == '\n' {
-		s = s[:len(s)-1]
-	}
-
-	if strings.HasPrefix(strings.TrimSpace(s), "//") {
-		// skip comment row
-		if comment != "" {
-			comment = comment + "\n" + strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(s), "//"))
+		if len(s) > 0 && s[len(s)-1] == '\n' {
+			s = s[:len(s)-1]
 		}
-		return r.ReadRow(comment)
 
+		if strings.HasPrefix(strings.TrimSpace(s), "//") {
+			// skip comment row
+			if comment != "" {
+				comment = comment + "\n" + strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(s), "//"))
+			}
+			continue
+		}
+
+		// skip empty rows
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+
+		return parseRecord(s, comment)
 	}
-
-	return parseRecord(s, comment)
 }
 
 func NewDecoder(r io.Reader) *Decoder {
