@@ -13,12 +13,14 @@ import (
 type Encoder struct {
 	w io.Writer
 
+	TimeLayout  string
 	SortMapKeys bool
 }
 
 func NewEncoder(w io.Writer) *Encoder {
 	enc := Encoder{
 		w:           w,
+		TimeLayout:  defaultEncoderTimeLayout,
 		SortMapKeys: true}
 
 	return &enc

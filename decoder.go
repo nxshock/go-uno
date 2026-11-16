@@ -10,6 +10,8 @@ import (
 
 type Decoder struct {
 	r *rowReader
+
+	TimeLayouts []string
 }
 
 type rowReader struct {
@@ -50,7 +52,10 @@ func (r *rowReader) ReadRow(comment string) (rec *record, err error) {
 }
 
 func NewDecoder(r io.Reader) *Decoder {
-	return &Decoder{r: &rowReader{r: bufio.NewReader(r)}}
+	return &Decoder{
+		r:           &rowReader{r: bufio.NewReader(r)},
+		TimeLayouts: defaultDecoderTimeLayouts,
+	}
 }
 
 func (dec *Decoder) decode(value reflect.Value, ident int) (unprocessedRow *record, err error) {
