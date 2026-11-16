@@ -583,3 +583,39 @@ func TestDontAllowSpaceInKeys(t *testing.T) {
 		assert.ErrorIs(t, err, test.expectedErr)
 	}
 }
+
+func TestBool(t *testing.T) {
+	type test struct {
+		valueStr      string
+		expectedValue bool
+		expectedErr   error
+	}
+
+	tests := []test{
+		// true
+		{valueStr: "true", expectedValue: true, expectedErr: nil},
+		{valueStr: "on", expectedValue: true, expectedErr: nil},
+		{valueStr: "open", expectedValue: true, expectedErr: nil},
+		{valueStr: "yes", expectedValue: true, expectedErr: nil},
+		// false
+		{valueStr: "false", expectedValue: false, expectedErr: nil},
+		{valueStr: "off", expectedValue: false, expectedErr: nil},
+		{valueStr: "close", expectedValue: false, expectedErr: nil},
+		{valueStr: "no", expectedValue: false, expectedErr: nil},
+		// other
+		{valueStr: "any", expectedValue: false, expectedErr: ErrWrongBoolValue},
+	}
+
+	for _, test := range tests {
+		type S struct {
+			B bool
+		}
+
+		s := S{}
+		str := fmt.Sprintf("B= %s", test.valueStr)
+
+		err := Unmarshal([]byte(str), &s)
+		assert.ErrorIs(t, err, test.expectedErr)
+		assert.Equal(t, test.expectedValue, s.B)
+	}
+}

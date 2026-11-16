@@ -244,7 +244,7 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 			return false, nil
 		}
 
-		return false, fmt.Errorf("wrong bool value: %s", r.Value)
+		return false, fmt.Errorf("%w: \"%s\"", ErrWrongBoolValue, r.Value)
 	case reflect.String:
 		return r.Value, nil
 	}
