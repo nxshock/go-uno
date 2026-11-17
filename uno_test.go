@@ -262,11 +262,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 	assert.Equal(t, s, newS)
 }
 
-func TestMarshalArray(t *testing.T) {
-	type Nested struct {
-		Strings []string
-	}
-
+func TestMarshalSlice(t *testing.T) {
 	type S struct {
 		Ints    []int
 		Strings []string
@@ -286,6 +282,45 @@ Strings:
 `
 
 	assert.Equal(t, expected, string(b))
+}
+
+func TestUnmarshalSlice(t *testing.T) {
+	type S struct {
+		Ints    []int
+		Strings []string
+	}
+
+	expected := S{Ints: []int{1, 2}, Strings: []string{"3", "4"}}
+
+	str := `Ints:
+= 1
+= 2
+Strings:
+- 3
+- 4
+`
+
+	got := S{}
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestMarshalUnmarshalSlice(t *testing.T) {
+	type S struct {
+		Ints    []int
+		Strings []string
+	}
+
+	expected := S{Ints: []int{1, 2}, Strings: []string{"3", "4"}}
+
+	b, err := Marshal(expected)
+	assert.NoError(t, err)
+
+	got := S{}
+	err = Unmarshal(b, &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
 }
 
 func TestMarshalStruct(t *testing.T) {

@@ -2,6 +2,7 @@ package uno
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -107,7 +108,7 @@ func NewDecoder(r io.Reader) *Decoder {
 	}
 }
 
-func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker itemMarker, nextRec *record) (unprocessedRow *record, err error) {
+func (dec *Decoder) decode(value reflect.Value, ident int, nextRec *record) (unprocessedRow *record, err error) {
 	for {
 		var rec *record
 		if nextRec != nil {
@@ -122,12 +123,16 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 			}
 		}
 
-		if rec.Indent < ident || parentItemMarker != rec.ItemMarker { // TODO: implement mixed type arrays
+		if rec.Indent < ident ||
+			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Slice) || // TODO: implement mixed type arrays
+			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Map) ||
+			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Array) {
+
 			return rec, nil
 		}
 
 		if rec.Key != "" && rec.Value == "" && rec.Delimiter == delimiterString {
-			// New field with types: struct, array, map
+			// New field with types: struct, array, map, multiline string
 			field := value.FieldByName(rec.Key)
 			if !field.IsValid() {
 				return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key) // TODO: add option to skip fields
@@ -151,18 +156,24 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 
 			switch nextRec.ItemMarker {
 			case itemMarkerMap:
-				nextRec, err = dec.decode(field, ident, itemMarkerMap, nextRec)
+				nextRec, err = dec.decode(field, ident, nextRec)
 				if err != nil {
 					return nil, err
 				}
-			case itemMarkerArrayString, itemMarkerArrayTyped:
-				nextRec, err = dec.decode(field, ident, itemMarkerArrayString, nextRec) // TODO: implement mixed type arrays
+			case itemMarkerArrayString:
+				nextRec, err = dec.decode(field, ident, nextRec) // TODO: implement mixed type arrays
+				if err != nil {
+					return nil, err
+				}
+				continue
+			case itemMarkerArrayTyped:
+				nextRec, err = dec.decode(field, ident, nextRec) // TODO: implement mixed type arrays
 				if err != nil {
 					return nil, err
 				}
 				continue
 			default:
-				nextRec, err = dec.decode(field, ident+1, itemMarkerNone, nextRec)
+				nextRec, err = dec.decode(field, ident+1, nextRec)
 				if err != nil {
 					return nil, err
 				}
@@ -207,6 +218,15 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 				}
 				value.SetMapIndex(reflect.ValueOf(rec.Key), reflect.ValueOf(v))
 			}
+		} else if rec.Key == "" && rec.Value != "" {
+			v, err := rec.decodeValue(value.Type().Elem())
+			if err != nil {
+				return nil, err
+			}
+			newV := reflect.Append(value, reflect.ValueOf(v))
+			value.Set(newV)
+		} else {
+			return nil, errors.New("unwknown conditions")
 		}
 	}
 	return nil, err
@@ -222,7 +242,7 @@ func (dec *Decoder) Decode(out any) (err error) {
 		return fmt.Errorf("can unmarshal only to %s, got %s", reflect.Struct, e.Kind().String())
 	}
 
-	_, err = dec.decode(e, 0, itemMarkerNone, nil)
+	_, err = dec.decode(e, 0, nil)
 	return err
 }
 
