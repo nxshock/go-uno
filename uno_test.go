@@ -704,7 +704,7 @@ func TestMarshalUnmarshalMultilineString(t *testing.T) {
 	}
 }
 
-func TestMarshalFieldTag(t *testing.T) {
+func TestMarshalFieldTagFieldName(t *testing.T) {
 	type S struct {
 		Field string `uno:"altFieldName"`
 	}
@@ -717,7 +717,7 @@ func TestMarshalFieldTag(t *testing.T) {
 	assert.Equal(t, expected, string(b))
 }
 
-func TestUnmarshalFieldTag(t *testing.T) {
+func TestUnmarshalFieldTagFieldName(t *testing.T) {
 	type S struct {
 		Field string `uno:"altFieldName"`
 	}
@@ -730,7 +730,7 @@ func TestUnmarshalFieldTag(t *testing.T) {
 	assert.Equal(t, S{Field: "value"}, got)
 }
 
-func TestMarshalUnmarshalTag(t *testing.T) {
+func TestMarshalUnmarshalTagFieldName(t *testing.T) {
 	type S struct {
 		Field string `uno:"altFieldName"`
 	}
@@ -745,4 +745,36 @@ func TestMarshalUnmarshalTag(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, s, newS)
+}
+
+func TestIgnoreFieldNameCase(t *testing.T) {
+	type S struct {
+		Field string
+	}
+
+	str := "field: value"
+
+	dec := NewDecoder(strings.NewReader(str))
+	dec.IgnoreFieldNameCase = true
+
+	s := S{}
+	err := dec.Decode(&s)
+	assert.NoError(t, err)
+	assert.Equal(t, S{Field: "value"}, s)
+}
+
+func TestIgnoreTagFieldNameCase(t *testing.T) {
+	type S struct {
+		Field string `uno:"altTagName"`
+	}
+
+	str := "alttagname: value"
+
+	dec := NewDecoder(strings.NewReader(str))
+	dec.IgnoreFieldNameCase = true
+
+	s := S{}
+	err := dec.Decode(&s)
+	assert.NoError(t, err)
+	assert.Equal(t, S{Field: "value"}, s)
 }

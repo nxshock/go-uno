@@ -11,7 +11,8 @@ import (
 type Decoder struct {
 	r *rowReader
 
-	TimeLayouts []string
+	TimeLayouts         []string
+	IgnoreFieldNameCase bool
 }
 
 type rowReader struct {
@@ -171,7 +172,15 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 
 			if value.Kind() == reflect.Struct {
 				for field, value := range value.Fields() {
-					if field.Tag.Get("uno") == rec.Key || (field.Name == rec.Key && field.Tag.Get("uno") == "") {
+					fieldTag := field.Tag.Get("uno")
+					key := rec.Key
+					fieldName := field.Name
+					if dec.IgnoreFieldNameCase {
+						fieldTag = strings.ToLower(fieldTag)
+						key = strings.ToLower(rec.Key)
+						fieldName = strings.ToLower(field.Name)
+					}
+					if fieldTag == key || (fieldName == rec.Key && fieldTag == "") {
 						if !field.IsExported() {
 							return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExported, value.Type().Name())
 						}
