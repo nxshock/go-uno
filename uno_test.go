@@ -817,3 +817,15 @@ func TestSkipFieldTag(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expected, string(b))
 }
+
+func TestDecodeFile(t *testing.T) {
+	type S struct {
+		Key string
+	}
+
+	got := S{}
+
+	err := DecodeFile("testdata/test_decode_file.uno", &got)
+	assert.NoError(t, err)
+	assert.Equal(t, S{Key: "Value"}, got)
+}
