@@ -19,6 +19,35 @@ type rowReader struct {
 	lineNumber uint
 }
 
+func (r *rowReader) ReadMultilineString(endString string) (string, error) {
+	b := new(strings.Builder)
+	for {
+		s, err := r.r.ReadString('\n')
+		if err == io.EOF {
+			if strings.HasPrefix(s, endString) {
+				break
+			} else {
+				return b.String(), io.ErrUnexpectedEOF
+			}
+		} else if err != nil {
+			return b.String(), err
+		}
+
+		if strings.HasPrefix(s, endString) {
+			break
+		}
+
+		_, err = b.WriteString(s)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	s := b.String()
+
+	return s[:len(s)-1], nil
+}
+
 func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 	var s string
 	for {
@@ -43,6 +72,22 @@ func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 				comment = comment + "\n" + strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(s), "//"))
 			}
 			continue
+		}
+
+		if strings.HasPrefix(s, "'") {
+			// start/end of multiline string
+			l := 0
+			for _, v := range s {
+				if v == '\'' {
+					l += 1
+				} else {
+					break
+				}
+			}
+			if len(s) != l {
+				return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrWrongMultilineStringBoundary, s)
+			}
+			return &record{multilineStringBoundary: s}, nil
 		}
 
 		// skip empty rows
@@ -92,6 +137,18 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 			if err != nil {
 				return nil, err // TODO: which kind of error can be?
 			}
+
+			if nextRec.multilineStringBoundary != "" {
+				s, err := dec.r.ReadMultilineString(nextRec.multilineStringBoundary)
+				if err != nil {
+					return nil, fmt.Errorf("line %d: %w", rec.lineNumber, err)
+				}
+
+				field.Set(reflect.ValueOf(s))
+				nextRec = nil
+				continue
+			}
+
 			switch nextRec.ItemMarker {
 			case itemMarkerMap:
 				nextRec, err = dec.decode(field, ident, itemMarkerMap, nextRec)

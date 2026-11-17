@@ -44,9 +44,11 @@ type record struct {
 	Key        string
 	Delimiter  delimiter
 	Value      string
-	Comment    string
 
-	lineNumber uint
+	Comment string
+
+	lineNumber              uint
+	multilineStringBoundary string
 }
 
 func parseRecord(s string, comment string, lineNumber uint) (*record, error) {

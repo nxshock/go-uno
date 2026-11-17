@@ -635,3 +635,70 @@ F2: true`
 	assert.ErrorIs(t, err, ErrDelimiterIsNotTypedForBool)
 	assert.True(t, strings.HasPrefix(err.Error(), "line 2: "))
 }
+
+func TestMarshalMultilineString(t *testing.T) {
+	type S struct {
+		Key1        string
+		MulilineKey string
+		Key2        string
+	}
+
+	tests := []struct {
+		s        S
+		expected string
+	}{
+		{s: S{MulilineKey: "line 1\nline 2"}, expected: "Key1: \nMulilineKey:\n'\nline 1\nline 2\n'\nKey2: \n"},
+		{s: S{MulilineKey: "line 1\n'\nline 2"}, expected: "Key1: \nMulilineKey:\n''\nline 1\n'\nline 2\n''\nKey2: \n"},
+	}
+
+	for _, test := range tests {
+		b, err := Marshal(test.s)
+		assert.NoError(t, err)
+		assert.Equal(t, test.expected, string(b))
+	}
+}
+
+func TestUnmarshalMultilineString(t *testing.T) {
+	type S struct {
+		Key string
+	}
+
+	tests := []struct {
+		str      string
+		expected S
+	}{
+		{str: "Key:\n'\nline 1\nline 2\n'", expected: S{Key: "line 1\nline 2"}},
+		{str: "Key:\n'\nline 1\nline 2\n\n'", expected: S{Key: "line 1\nline 2\n"}},
+	}
+
+	for _, test := range tests {
+		s := S{}
+
+		err := Unmarshal([]byte(test.str), &s)
+		assert.NoError(t, err)
+		assert.Equal(t, test.expected, s)
+	}
+}
+
+func TestMarshalUnmarshalMultilineString(t *testing.T) {
+	type S struct {
+		Key1        string
+		MulilineKey string
+		Key2        string
+	}
+
+	tests := []struct {
+		s S
+	}{
+		{s: S{Key1: "Value1", MulilineKey: "Line1\n'\nLine2", Key2: "Value2"}},
+	}
+
+	for _, test := range tests {
+		b, err := Marshal(test.s)
+		assert.NoError(t, err)
+		got := S{}
+		err = Unmarshal(b, &got)
+		assert.NoError(t, err)
+		assert.Equal(t, test.s, got)
+	}
+}

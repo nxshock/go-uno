@@ -14,15 +14,12 @@ var defaultDecoderTimeLayouts = []string{
 var defaultEncoderTimeLayout = time.RFC3339
 
 var (
-	errSkipEmptyLine = errors.New("empty line")
-)
-
-var (
-	ErrSpaceInKey                 = errors.New("spaces is not allowed in keys")
-	ErrWrongBoolValue             = errors.New("wrong bool value")
-	ErrFieldIsNotExists           = errors.New("field is not exists")
-	ErrFieldIsNotSettable         = errors.New("field is not settable")
-	ErrMapKeyIsNotString          = errors.New("map key is not string")
-	ErrDelimiterIsNotTypedForBool = errors.New("delimiter is not typed for bool")
-	ErrUnsupportedType            = errors.New("unsupported type")
+	ErrSpaceInKey                   = errors.New("spaces is not allowed in keys")
+	ErrWrongBoolValue               = errors.New("wrong bool value")
+	ErrFieldIsNotExists             = errors.New("field is not exists")
+	ErrFieldIsNotSettable           = errors.New("field is not settable")
+	ErrMapKeyIsNotString            = errors.New("map key is not string")
+	ErrDelimiterIsNotTypedForBool   = errors.New("delimiter is not typed for bool")
+	ErrUnsupportedType              = errors.New("unsupported type")
+	ErrWrongMultilineStringBoundary = errors.New("wrong multiline strng boundary")
 )

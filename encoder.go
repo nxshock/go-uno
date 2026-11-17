@@ -1,11 +1,13 @@
 package uno
 
 import (
+	"bufio"
 	"encoding"
 	"fmt"
 	"io"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -47,6 +49,32 @@ func structPointer(obj any) any {
 	return vp.Interface()
 }
 
+func multilineBoundary(s string) string {
+	r := bufio.NewReader(strings.NewReader(s))
+
+	max := 0
+	for {
+		s, err := r.ReadString('\n')
+		if err == io.EOF {
+			break
+		}
+
+		l := 0
+		for _, v := range s {
+			if v == '\'' {
+				l += 1
+			} else {
+				break
+			}
+		}
+		if l > max {
+			max = l
+		}
+	}
+
+	return strings.Repeat("'", max+1)
+}
+
 func (enc *Encoder) encode(fieldName string, val reflect.Value, prefix string) error {
 	if val.Type().String() != "time.Time" {
 		if f, ok := structPointer(val.Interface()).(encoding.TextMarshaler); ok {
@@ -73,11 +101,17 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, prefix string) e
 	case reflect.Bool:
 		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.String:
-		delimiter := string(delimiterString)
-		if fieldName == "" {
-			delimiter = "-"
+		str := val.Interface().(string)
+		if strings.Contains(str, "\n") {
+			mb := multilineBoundary(str)
+			fmt.Fprintf(enc.w, "%s%s:\n%s\n%v\n%s\n", prefix, fieldName, mb, str, mb)
+		} else {
+			delimiter := string(delimiterString)
+			if fieldName == "" {
+				delimiter = "-"
+			}
+			fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, delimiter, str)
 		}
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, delimiter, val.Interface())
 	case reflect.Slice:
 		fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
 
