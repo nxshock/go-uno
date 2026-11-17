@@ -249,7 +249,7 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 			return false, nil
 		}
 
-		return false, fmt.Errorf("line %d: %w: \"%s\"", r.lineNumber, ErrWrongBoolValue, r.Value)
+		return false, fmt.Errorf("line %d: %w: \"%s\"", r.lineNumber, ErrInvalidBoolValue, r.Value)
 	case reflect.String:
 		return r.Value, nil
 	}

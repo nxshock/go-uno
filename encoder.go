@@ -155,7 +155,7 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 			}
 		}
 	default:
-		return fmt.Errorf("unsupported type for encoding: %s", val.Type().String())
+		return fmt.Errorf("%w: %s", ErrUnsupportedType, val.Type().String())
 	}
 
 	return nil

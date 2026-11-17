@@ -2,7 +2,6 @@ package uno
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"reflect"
 	"strconv"
@@ -641,7 +640,7 @@ func TestBool(t *testing.T) {
 		{valueStr: "close", expectedValue: false, expectedErr: nil},
 		{valueStr: "no", expectedValue: false, expectedErr: nil},
 		// other
-		{valueStr: "any", expectedValue: false, expectedErr: ErrWrongBoolValue},
+		{valueStr: "any", expectedValue: false, expectedErr: ErrInvalidBoolValue},
 	}
 
 	for _, test := range tests {
@@ -874,7 +873,6 @@ func TestUnexportedField(t *testing.T) {
 	str := `key: value`
 	got := S{}
 	err := Unmarshal([]byte(str), &got)
-	log.Println(err)
 	assert.ErrorIs(t, err, ErrFieldIsNotExported)
 }
 
@@ -899,8 +897,37 @@ skip4= 1
 
 	got := S{}
 	dec := NewDecoder(strings.NewReader(str))
-	dec.SkipNonExistentFields = true
 	err := dec.Decode(&got)
+	assert.ErrorIs(t, err, ErrFieldIsNotExists)
+
+	dec.SkipNonExistentFields = true
+	err = dec.Decode(&got)
 	assert.NoError(t, err)
 	assert.Equal(t, S{Key1: "value1", Key2: "value2", Key3: "value3"}, got)
+}
+
+func TestUnsupportedTypes(t *testing.T) {
+	type S struct {
+		Key complex64
+	}
+
+	s := S{}
+
+	_, err := Marshal(s)
+	assert.ErrorIs(t, err, ErrUnsupportedType)
+}
+
+func TestInvalidMapIdent(t *testing.T) {
+	type S struct {
+		M map[string]int
+	}
+
+	str := `M:
+	. Key1= 1
+	. Key2= 2`
+
+	s := S{}
+
+	err := Unmarshal([]byte(str), &s)
+	assert.ErrorIs(t, err, ErrInvalidIndentation)
 }

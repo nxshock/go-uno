@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -88,7 +89,7 @@ func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 				}
 			}
 			if len(s) != l {
-				return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrWrongMultilineStringBoundary, s)
+				return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrInvalidMultilineStringBoundary, s)
 			}
 			return &record{multilineStringBoundary: s}, nil
 		}
@@ -141,6 +142,10 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 			}
 		}
 
+		if slices.Contains([]reflect.Kind{reflect.Array, reflect.Map, reflect.Slice}, value.Kind()) && rec.Indent > indent && rec.ItemMarker == itemMarkerMap {
+			return nil, fmt.Errorf("line %d: %w: expected %d, got %d", rec.lineNumber, ErrInvalidIndentation, indent, rec.Indent)
+		}
+
 		if rec.Indent < indent ||
 			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Slice) || // TODO: implement mixed type arrays
 			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Map) ||
@@ -160,7 +165,7 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 					}
 					continue
 				} else {
-					return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key) // TODO: add option to skip fields
+					return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key)
 				}
 			}
 
