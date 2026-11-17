@@ -38,7 +38,7 @@ const (
 )
 
 type record struct {
-	Indent     int
+	Indent     uint
 	Directive  directive
 	ItemMarker itemMarker
 	Key        string
@@ -55,7 +55,7 @@ func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
 	r := strings.NewReader(s)
 
 	// indent
-	indent := 0
+	indent := uint(0)
 	for {
 		ch, _, err := r.ReadRune()
 		if err != nil {

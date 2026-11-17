@@ -877,3 +877,30 @@ func TestUnexportedField(t *testing.T) {
 	log.Println(err)
 	assert.ErrorIs(t, err, ErrFieldIsNotExported)
 }
+
+func TestSkipNonExistentFields(t *testing.T) {
+	type S struct {
+		Key1 string
+		Key2 string
+		Key3 string
+	}
+
+	str := `Key1: value1
+skip1: value
+Key2: value2
+skip2:
+- 1
+- 2
+skip3:
+	Key: value
+Key3: value3
+skip4= 1
+`
+
+	got := S{}
+	dec := NewDecoder(strings.NewReader(str))
+	dec.SkipNonExistentFields = true
+	err := dec.Decode(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, S{Key1: "value1", Key2: "value2", Key3: "value3"}, got)
+}

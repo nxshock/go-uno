@@ -12,8 +12,9 @@ import (
 type Decoder struct {
 	r *rowReader
 
-	TimeLayouts         []string
-	IgnoreFieldNameCase bool
+	TimeLayouts           []string
+	IgnoreFieldNameCase   bool
+	SkipNonExistentFields bool
 }
 
 type rowReader struct {
@@ -108,7 +109,24 @@ func NewDecoder(r io.Reader) *Decoder {
 	}
 }
 
-func (dec *Decoder) decode(value reflect.Value, ident int, nextRec *record) (unprocessedRow *record, err error) {
+func (dec *Decoder) SkipCurrentBlock(indent uint) (rec *record, err error) {
+	for {
+		rec, err = dec.r.ReadRecord("")
+		if err == io.EOF {
+			return nil, nil
+		} else if err != nil {
+			return nil, err
+		}
+
+		if rec.Indent == indent && rec.Key != "" {
+			break
+		}
+	}
+
+	return rec, nil
+}
+
+func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (unprocessedRow *record, err error) {
 	for {
 		var rec *record
 		if nextRec != nil {
@@ -123,7 +141,7 @@ func (dec *Decoder) decode(value reflect.Value, ident int, nextRec *record) (unp
 			}
 		}
 
-		if rec.Indent < ident ||
+		if rec.Indent < indent ||
 			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Slice) || // TODO: implement mixed type arrays
 			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Map) ||
 			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Array) {
@@ -135,7 +153,15 @@ func (dec *Decoder) decode(value reflect.Value, ident int, nextRec *record) (unp
 			// New field with types: struct, array, map, multiline string
 			field := value.FieldByName(rec.Key)
 			if !field.IsValid() {
-				return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key) // TODO: add option to skip fields
+				if dec.SkipNonExistentFields {
+					nextRec, err = dec.SkipCurrentBlock(uint(indent))
+					if err != nil {
+						return nil, err
+					}
+					continue
+				} else {
+					return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key) // TODO: add option to skip fields
+				}
 			}
 
 			nextRec, err = dec.r.ReadRecord("")
@@ -156,24 +182,24 @@ func (dec *Decoder) decode(value reflect.Value, ident int, nextRec *record) (unp
 
 			switch nextRec.ItemMarker {
 			case itemMarkerMap:
-				nextRec, err = dec.decode(field, ident, nextRec)
+				nextRec, err = dec.decode(field, indent, nextRec)
 				if err != nil {
 					return nil, err
 				}
 			case itemMarkerArrayString:
-				nextRec, err = dec.decode(field, ident, nextRec) // TODO: implement mixed type arrays
+				nextRec, err = dec.decode(field, indent, nextRec) // TODO: implement mixed type arrays
 				if err != nil {
 					return nil, err
 				}
 				continue
 			case itemMarkerArrayTyped:
-				nextRec, err = dec.decode(field, ident, nextRec) // TODO: implement mixed type arrays
+				nextRec, err = dec.decode(field, indent, nextRec) // TODO: implement mixed type arrays
 				if err != nil {
 					return nil, err
 				}
 				continue
 			default:
-				nextRec, err = dec.decode(field, ident+1, nextRec)
+				nextRec, err = dec.decode(field, indent+1, nextRec)
 				if err != nil {
 					return nil, err
 				}
@@ -182,6 +208,7 @@ func (dec *Decoder) decode(value reflect.Value, ident int, nextRec *record) (unp
 			// New field with simple value
 
 			if value.Kind() == reflect.Struct {
+				found := false
 				for field, value := range value.Fields() {
 					key := rec.Key
 					fieldName := getStructFieldName(field)
@@ -201,10 +228,17 @@ func (dec *Decoder) decode(value reflect.Value, ident int, nextRec *record) (unp
 						if v != nil {
 							setValue(value, v)
 						}
+						found = true
 						break
 					}
 				}
-
+				if !found {
+					if dec.SkipNonExistentFields {
+						nextRec, err = dec.SkipCurrentBlock(indent)
+					} else {
+						return nil, fmt.Errorf("line %d: %w: %s", rec.lineNumber, ErrFieldIsNotExists, rec.Key)
+					}
+				}
 			} else if value.Kind() == reflect.Map {
 				if value.Type().Key().Kind() != reflect.String {
 					return nil, fmt.Errorf("line %d: %w, got %s", rec.lineNumber, ErrMapKeyIsNotString, value.Type().Key().String())
