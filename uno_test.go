@@ -2,6 +2,7 @@ package uno
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"reflect"
 	"strconv"
@@ -828,4 +829,16 @@ func TestDecodeFile(t *testing.T) {
 	err := DecodeFile("testdata/test_decode_file.uno", &got)
 	assert.NoError(t, err)
 	assert.Equal(t, S{Key: "Value"}, got)
+}
+
+func TestUnexportedField(t *testing.T) {
+	type S struct {
+		key string
+	}
+
+	str := `key: value`
+	got := S{}
+	err := Unmarshal([]byte(str), &got)
+	log.Println(err)
+	assert.ErrorIs(t, err, ErrFieldIsNotExported)
 }

@@ -180,7 +180,7 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 					}
 					if fieldName == key {
 						if !field.IsExported() {
-							return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExported, value.Type().Name())
+							return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExported, fieldName)
 						}
 
 						v, err := rec.decodeValue(field.Type)
