@@ -172,15 +172,13 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 
 			if value.Kind() == reflect.Struct {
 				for field, value := range value.Fields() {
-					fieldTag := field.Tag.Get("uno")
 					key := rec.Key
-					fieldName := field.Name
+					fieldName := getStructFieldName(field)
 					if dec.IgnoreFieldNameCase {
-						fieldTag = strings.ToLower(fieldTag)
 						key = strings.ToLower(rec.Key)
-						fieldName = strings.ToLower(field.Name)
+						fieldName = strings.ToLower(fieldName)
 					}
-					if fieldTag == key || (fieldName == rec.Key && fieldTag == "") {
+					if fieldName == key {
 						if !field.IsExported() {
 							return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExported, value.Type().Name())
 						}

@@ -34,11 +34,7 @@ func (enc *Encoder) Encode(in any) error {
 	}
 
 	for field, value := range e.Fields() {
-		fieldName := field.Name
-		if tagFieldName := field.Tag.Get("uno"); tagFieldName != "" {
-			fieldName = tagFieldName
-		}
-		err := enc.encode(fieldName, value, "")
+		err := enc.encode(&field, getStructFieldName(field), value, "")
 		if err != nil {
 			return err
 		}
@@ -79,7 +75,15 @@ func multilineBoundary(s string) string {
 	return strings.Repeat("'", max+1)
 }
 
-func (enc *Encoder) encode(fieldName string, val reflect.Value, prefix string) error {
+func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val reflect.Value, prefix string) error {
+	if fieldName == "-" {
+		return nil
+	}
+
+	if field != nil && getStructFieldOmitEmpty(*field) && valueIsEmpty(val) {
+		return nil
+	}
+
 	if val.Type().String() != "time.Time" {
 		if f, ok := structPointer(val.Interface()).(encoding.TextMarshaler); ok {
 			b, err := f.MarshalText()
@@ -116,11 +120,11 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, prefix string) e
 			}
 			fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, delimiter, str)
 		}
-	case reflect.Slice:
+	case reflect.Slice, reflect.Array:
 		fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
 
 		for i := range val.Len() {
-			err := enc.encode("", val.Index(i), prefix)
+			err := enc.encode(nil, "", val.Index(i), prefix)
 			if err != nil {
 				return err
 			}
@@ -132,7 +136,7 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, prefix string) e
 		} else {
 			fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
 			for field, value := range val.Fields() {
-				err := enc.encode(field.Name, value, prefix+"\t")
+				err := enc.encode(&field, getStructFieldName(field), value, prefix+"\t")
 				if err != nil {
 					return err
 				}
@@ -145,7 +149,7 @@ func (enc *Encoder) encode(fieldName string, val reflect.Value, prefix string) e
 			sort.Sort(sortKeys(keys))
 		}
 		for _, key := range keys {
-			err := enc.encode(key.String(), val.MapIndex(key), prefix+". ")
+			err := enc.encode(nil, key.String(), val.MapIndex(key), prefix+". ")
 			if err != nil {
 				return err
 			}

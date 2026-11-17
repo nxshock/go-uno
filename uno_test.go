@@ -778,3 +778,35 @@ func TestIgnoreTagFieldNameCase(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, S{Field: "value"}, s)
 }
+
+func TestOmitEmptyTag(t *testing.T) {
+	type S struct {
+		EmptyString  string           `uno:",omitempty"`
+		EmptyPointer *S               `uno:",omitempty"`
+		EmptyMap     map[int]struct{} `uno:",omitempty"`
+		NotEmpty     string           `uno:",omitempty"`
+	}
+
+	s := S{EmptyString: "", EmptyPointer: nil, NotEmpty: "value"}
+
+	expected := "NotEmpty: value\n"
+
+	b, err := Marshal(s)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(b))
+}
+
+func TestSkipFieldTag(t *testing.T) {
+	type S struct {
+		Skip    string `uno:"-"`
+		NotSkip string
+	}
+
+	s := S{Skip: "Value", NotSkip: "Value"}
+
+	expected := "NotSkip: Value\n"
+
+	b, err := Marshal(s)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(b))
+}
