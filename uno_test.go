@@ -58,6 +58,7 @@ func TestParseString(t *testing.T) {
 		{s: "key: text string", expected: "text string"},
 		{s: "key: '    text string    '", expected: "    text string    "},
 		{s: "key: ''text ''", expected: "'text '"},
+		{s: "key: '", expected: "'"},
 	}
 
 	for _, test := range tests {
