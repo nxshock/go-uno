@@ -17,7 +17,7 @@ var (
 	ErrSpaceInKey                   = errors.New("spaces is not allowed in keys")
 	ErrWrongBoolValue               = errors.New("wrong bool value")
 	ErrFieldIsNotExists             = errors.New("field is not exists")
-	ErrFieldIsNotSettable           = errors.New("field is not settable")
+	ErrFieldIsNotExported           = errors.New("field is not exported")
 	ErrMapKeyIsNotString            = errors.New("map key is not string")
 	ErrDelimiterIsNotTypedForBool   = errors.New("delimiter is not typed for bool")
 	ErrUnsupportedType              = errors.New("unsupported type")

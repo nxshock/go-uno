@@ -703,3 +703,46 @@ func TestMarshalUnmarshalMultilineString(t *testing.T) {
 		assert.Equal(t, test.s, got)
 	}
 }
+
+func TestMarshalFieldTag(t *testing.T) {
+	type S struct {
+		Field string `uno:"altFieldName"`
+	}
+
+	expected := "altFieldName: value\n"
+
+	s := S{Field: "value"}
+	b, err := Marshal(s)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(b))
+}
+
+func TestUnmarshalFieldTag(t *testing.T) {
+	type S struct {
+		Field string `uno:"altFieldName"`
+	}
+
+	str := "altFieldName: value"
+
+	got := S{}
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, S{Field: "value"}, got)
+}
+
+func TestMarshalUnmarshalTag(t *testing.T) {
+	type S struct {
+		Field string `uno:"altFieldName"`
+	}
+
+	s := S{Field: "value"}
+
+	b, err := Marshal(s)
+	assert.NoError(t, err)
+
+	newS := S{}
+	err = Unmarshal(b, &newS)
+	assert.NoError(t, err)
+
+	assert.Equal(t, s, newS)
+}

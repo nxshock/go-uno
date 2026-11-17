@@ -127,7 +127,6 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 
 		if rec.Key != "" && rec.Value == "" && rec.Delimiter == delimiterString {
 			// New field with types: struct, array, map
-
 			field := value.FieldByName(rec.Key)
 			if !field.IsValid() {
 				return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key) // TODO: add option to skip fields
@@ -171,21 +170,23 @@ func (dec *Decoder) decode(value reflect.Value, ident int, parentItemMarker item
 			// New field with simple value
 
 			if value.Kind() == reflect.Struct {
-				field := value.FieldByName(rec.Key)
-				if !field.IsValid() {
-					return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key) // TODO: add option to skip fields
-				}
-				if !field.CanSet() {
-					return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotSettable, field.Type().Name())
+				for field, value := range value.Fields() {
+					if field.Tag.Get("uno") == rec.Key || (field.Name == rec.Key && field.Tag.Get("uno") == "") {
+						if !field.IsExported() {
+							return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExported, value.Type().Name())
+						}
+
+						v, err := rec.decodeValue(field.Type)
+						if err != nil {
+							return nil, err
+						}
+						if v != nil {
+							setValue(value, v)
+						}
+						break
+					}
 				}
 
-				v, err := rec.decodeValue(field.Type())
-				if err != nil {
-					return nil, err
-				}
-				if v != nil {
-					setValue(field, v)
-				}
 			} else if value.Kind() == reflect.Map {
 				if value.Type().Key().Kind() != reflect.String {
 					return nil, fmt.Errorf("line %d: %w, got %s", rec.lineNumber, ErrMapKeyIsNotString, value.Type().Key().String())

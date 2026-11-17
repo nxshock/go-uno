@@ -34,7 +34,11 @@ func (enc *Encoder) Encode(in any) error {
 	}
 
 	for field, value := range e.Fields() {
-		err := enc.encode(field.Name, value, "")
+		fieldName := field.Name
+		if tagFieldName := field.Tag.Get("uno"); tagFieldName != "" {
+			fieldName = tagFieldName
+		}
+		err := enc.encode(fieldName, value, "")
 		if err != nil {
 			return err
 		}
