@@ -7,14 +7,13 @@ func valueIsEmpty(v reflect.Value) bool {
 		if v.IsNil() {
 			return true
 		}
+
 		v = v.Elem()
 	}
 
 	switch v.Kind() {
 	case reflect.Map, reflect.String, reflect.Array, reflect.Slice:
 		return v.IsZero()
-		/*case reflect.String:
-		return v.Interface().(string) == ""*/
 	}
 
 	return false

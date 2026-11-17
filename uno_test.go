@@ -784,12 +784,19 @@ func TestOmitEmptyTag(t *testing.T) {
 		EmptyString  string           `uno:",omitempty"`
 		EmptyPointer *S               `uno:",omitempty"`
 		EmptyMap     map[int]struct{} `uno:",omitempty"`
+		EmptySlice   []string         `uno:",omitempty"`
 		NotEmpty     string           `uno:",omitempty"`
+		ZeroInt      int              `uno:",omitempty"`
 	}
 
-	s := S{EmptyString: "", EmptyPointer: nil, NotEmpty: "value"}
+	s := S{
+		EmptyString:  "",
+		EmptyPointer: nil,
+		EmptyMap:     nil,
+		EmptySlice:   nil,
+		NotEmpty:     "value"}
 
-	expected := "NotEmpty: value\n"
+	expected := "NotEmpty: value\nZeroInt= 0\n"
 
 	b, err := Marshal(s)
 	assert.NoError(t, err)
