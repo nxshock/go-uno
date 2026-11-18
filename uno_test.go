@@ -2,6 +2,7 @@ package uno
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"strconv"
@@ -39,8 +40,8 @@ func TestListItem(t *testing.T) {
 		s        string
 		expected record
 	}{
-		{s: "- text", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerArrayString, Key: "", Delimiter: delimiterNone, Value: "text", lineNumber: 1}},
-		{s: "= 129.56", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerArrayTyped, Key: "", Delimiter: delimiterNone, Value: "129.56", lineNumber: 1}},
+		{s: "- text", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceString, Key: "", Delimiter: delimiterNone, Value: "text", lineNumber: 1}},
+		{s: "= 129.56", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceTyped, Key: "", Delimiter: delimiterNone, Value: "129.56", lineNumber: 1}},
 	}
 
 	for _, test := range tests {
@@ -64,7 +65,7 @@ func TestParseString(t *testing.T) {
 	for _, test := range tests {
 		row, err := parseRecord(test.s, "", 1)
 		assert.NoError(t, err)
-		v, err := row.decodeValue(reflect.TypeOf(""))
+		v, err := row.decodeValue(reflect.TypeFor[string]())
 		assert.Equal(t, test.expected, v)
 	}
 }
@@ -700,18 +701,24 @@ func TestUnmarshalMultilineString(t *testing.T) {
 	}
 
 	tests := []struct {
-		str      string
-		expected S
+		str         string
+		expected    S
+		expectedErr error
 	}{
-		{str: "Key:\n'\nline 1\nline 2\n'", expected: S{Key: "line 1\nline 2"}},
-		{str: "Key:\n'\nline 1\nline 2\n\n'", expected: S{Key: "line 1\nline 2\n"}},
+		{str: "Key:\n'\nline 1\nline 2\n'", expected: S{Key: "line 1\nline 2"}, expectedErr: nil},
+		{str: "Key:\n'\nline 1\nline 2\n\n'", expected: S{Key: "line 1\nline 2\n"}, expectedErr: nil},
+
+		{str: "Key:\n'\nline 1\n''\nline 2\n'", expected: S{Key: "line 1\n''\nline 2"}, expectedErr: nil}, // TODO: valid or not valid?
+
+		{str: "Key:\n''\nline 1\nline 2\n'", expected: S{Key: ""}, expectedErr: io.ErrUnexpectedEOF},
+		{str: "Key:\n'\nline 1\nline 2\n''", expected: S{Key: ""}, expectedErr: io.ErrUnexpectedEOF},
 	}
 
 	for _, test := range tests {
 		s := S{}
 
 		err := Unmarshal([]byte(test.str), &s)
-		assert.NoError(t, err)
+		assert.ErrorIs(t, err, test.expectedErr)
 		assert.Equal(t, test.expected, s)
 	}
 }
@@ -907,14 +914,22 @@ skip4= 1
 }
 
 func TestUnsupportedTypes(t *testing.T) {
-	type S struct {
+	type S1 struct {
 		Key complex64
 	}
 
-	s := S{}
+	type S2 struct {
+		Key []complex64
+	}
 
-	_, err := Marshal(s)
-	assert.ErrorIs(t, err, ErrUnsupportedType)
+	tests := []any{
+		S1{},
+		S2{Key: []complex64{complex64(1)}}} // TODO: allow slices of unsupported types or not?
+
+	for _, test := range tests {
+		_, err := Marshal(test)
+		assert.ErrorIs(t, err, ErrUnsupportedType)
+	}
 }
 
 func TestInvalidMapIdent(t *testing.T) {
@@ -930,4 +945,106 @@ func TestInvalidMapIdent(t *testing.T) {
 
 	err := Unmarshal([]byte(str), &s)
 	assert.ErrorIs(t, err, ErrInvalidIndentation)
+}
+
+func TestInvalidMultilineStringBoundary(t *testing.T) {
+	str := `Key:
+'a
+text
+'`
+
+	var s struct{ Key string }
+
+	err := Unmarshal([]byte(str), &s)
+	assert.ErrorIs(t, err, ErrInvalidMultilineStringBoundary)
+}
+
+func TestInvalidUnmarshalSliceToOtherType(t *testing.T) {
+	tests := []struct {
+		str         string
+		expectedErr error
+	}{
+		{str: "Key:\n- 1", expectedErr: ErrTryingToDecodeSliceToNonSlice},
+		{str: "Key:\n= 1", expectedErr: ErrTryingToDecodeSliceToNonSlice},
+	}
+
+	for _, test := range tests {
+		s := struct{ Key any }{}
+
+		err := Unmarshal([]byte(test.str), &s)
+		assert.ErrorIs(t, err, test.expectedErr)
+	}
+}
+
+func TestInvalidUnmarshalMapToOtherType(t *testing.T) {
+	tests := []struct {
+		str         string
+		expectedErr error
+	}{
+		{str: "Key:\n. k1: 1", expectedErr: ErrTryingToDecodeMapToNonMap},
+		{str: "Key:\n. k1= 1", expectedErr: ErrTryingToDecodeMapToNonMap},
+	}
+
+	for _, test := range tests {
+		s := struct{ Key any }{}
+
+		err := Unmarshal([]byte(test.str), &s)
+		assert.ErrorIs(t, err, test.expectedErr)
+	}
+}
+
+func TestInvalidSliceItemTypeStringToNonString(t *testing.T) {
+	str := "Key:\n- 1\n= 2"
+
+	s := struct{ Key []int }{}
+
+	err := Unmarshal([]byte(str), &s)
+	assert.ErrorIs(t, err, ErrInvalidSliceType)
+}
+
+func TestInvalidSliceItemTypeNontStringToString(t *testing.T) {
+	str := `Key:
+= 1
+- 2`
+
+	s := struct{ Key []string }{}
+
+	err := Unmarshal([]byte(str), &s)
+	assert.ErrorIs(t, err, ErrInvalidSliceType)
+}
+
+func TestUnmarshalToSliceOfPointers(t *testing.T) {
+	str := "Key:\n- val1\n- val2"
+
+	type S struct {
+		Key []*string
+	}
+
+	v1 := "val1"
+	v2 := "val2"
+
+	expected := S{Key: []*string{&v1, &v2}}
+
+	got := S{}
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestUnmarshalToNestedPointer(t *testing.T) {
+	str := "Key= 2001-02-03"
+
+	type S struct {
+		Key **time.Time
+	}
+
+	expectedTime := time.Date(2001, 2, 3, 0, 0, 0, 0, time.UTC)
+	ptr := &expectedTime
+	expected := S{Key: &ptr}
+
+	got := S{}
+
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
 }

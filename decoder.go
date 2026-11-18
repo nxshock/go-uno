@@ -28,7 +28,7 @@ func (r *rowReader) ReadMultilineString(endString string) (string, error) {
 	for {
 		s, err := r.r.ReadString('\n')
 		if err == io.EOF {
-			if strings.HasPrefix(s, endString) {
+			if s == endString+"\n" || s == endString {
 				break
 			} else {
 				return b.String(), io.ErrUnexpectedEOF
@@ -37,7 +37,10 @@ func (r *rowReader) ReadMultilineString(endString string) (string, error) {
 			return b.String(), err
 		}
 
-		if strings.HasPrefix(s, endString) {
+		/*if strings.HasPrefix(s, endString) {
+			break
+		}*/
+		if s == endString+"\n" {
 			break
 		}
 
@@ -187,17 +190,35 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 
 			switch nextRec.ItemMarker {
 			case itemMarkerMap:
+				if field.Kind() != reflect.Map {
+					return nil, fmt.Errorf("line %d: %w: %s", nextRec.lineNumber, ErrTryingToDecodeMapToNonMap, field.Type().Name())
+				}
+
 				nextRec, err = dec.decode(field, indent, nextRec)
 				if err != nil {
 					return nil, err
 				}
-			case itemMarkerArrayString:
+			case itemMarkerSliceString:
+				if field.Kind() != reflect.Slice {
+					return nil, fmt.Errorf("line %d: %w: %s", nextRec.lineNumber, ErrTryingToDecodeSliceToNonSlice, field.Type().Name())
+				}
+				if targetType(field.Type().Elem()).Kind() != reflect.String {
+					return nil, fmt.Errorf("line %d: %w: expected %s, got %s", nextRec.lineNumber, ErrInvalidSliceType, reflect.String, targetType(field.Type().Elem()).Kind())
+				}
+
 				nextRec, err = dec.decode(field, indent, nextRec) // TODO: implement mixed type arrays
 				if err != nil {
 					return nil, err
 				}
 				continue
-			case itemMarkerArrayTyped:
+			case itemMarkerSliceTyped:
+				if field.Kind() != reflect.Slice {
+					return nil, fmt.Errorf("line %d: %w: %s", nextRec.lineNumber, ErrTryingToDecodeSliceToNonSlice, field.Type().Name())
+				}
+				if targetType(field.Type().Elem()).Kind() == reflect.String {
+					return nil, fmt.Errorf("line %d: %w: expected non %s, got %s", nextRec.lineNumber, ErrInvalidSliceType, reflect.String, targetType(field.Type().Elem()).Kind())
+				}
+
 				nextRec, err = dec.decode(field, indent, nextRec) // TODO: implement mixed type arrays
 				if err != nil {
 					return nil, err
@@ -262,6 +283,11 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 			if err != nil {
 				return nil, err
 			}
+
+			if value.Type().Elem().Kind() == reflect.Pointer {
+				v = getPointer(v)
+			}
+
 			newV := reflect.Append(value, reflect.ValueOf(v))
 			value.Set(newV)
 		} else {
@@ -283,18 +309,4 @@ func (dec *Decoder) Decode(out any) (err error) {
 
 	_, err = dec.decode(e, 0, nil)
 	return err
-}
-
-func setValue(field reflect.Value, value any) {
-	if field.Kind() == reflect.Pointer {
-		v := reflect.New(field.Type().Elem())
-		v.Elem().Set(reflect.ValueOf(value))
-		field.Set(v)
-	} else {
-		if reflect.ValueOf(value).Kind() == reflect.Pointer {
-			field.Set(reflect.ValueOf(value).Elem())
-		} else {
-			field.Set(reflect.ValueOf(value))
-		}
-	}
 }

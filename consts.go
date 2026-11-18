@@ -23,4 +23,7 @@ var (
 	ErrUnsupportedType                = errors.New("unsupported type")
 	ErrInvalidMultilineStringBoundary = errors.New("invalid multiline strng boundary")
 	ErrInvalidIndentation             = errors.New("invalid indentation")
+	ErrTryingToDecodeSliceToNonSlice  = errors.New("trying to decode slice to non slice")
+	ErrTryingToDecodeMapToNonMap      = errors.New("trying to decode map to non map")
+	ErrInvalidSliceType               = errors.New("invalid slice type")
 )

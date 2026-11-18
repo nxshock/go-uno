@@ -43,7 +43,7 @@ func (enc *Encoder) Encode(in any) error {
 	return nil
 }
 
-func structPointer(obj any) any {
+func getPointer(obj any) any {
 	vp := reflect.New(reflect.TypeOf(obj))
 	vp.Elem().Set(reflect.ValueOf(obj))
 	return vp.Interface()
@@ -85,7 +85,7 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 	}
 
 	if val.Type().String() != "time.Time" {
-		if f, ok := structPointer(val.Interface()).(encoding.TextMarshaler); ok {
+		if f, ok := getPointer(val.Interface()).(encoding.TextMarshaler); ok {
 			b, err := f.MarshalText()
 			if err != nil {
 				return err

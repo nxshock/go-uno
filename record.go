@@ -24,8 +24,8 @@ type itemMarker rune
 
 const (
 	itemMarkerNone        = itemMarker(' ')
-	itemMarkerArrayString = itemMarker('-')
-	itemMarkerArrayTyped  = itemMarker('=')
+	itemMarkerSliceString = itemMarker('-')
+	itemMarkerSliceTyped  = itemMarker('=')
 	itemMarkerMap         = itemMarker('.')
 )
 
@@ -100,7 +100,7 @@ func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
 		return nil, fmt.Errorf("read item marker: %v", err)
 	}
 	switch itemMarker(ch) {
-	case itemMarkerArrayString, itemMarkerArrayTyped, itemMarkerMap:
+	case itemMarkerSliceString, itemMarkerSliceTyped, itemMarkerMap:
 		itmMarker = itemMarker(ch)
 		ch, _, err = r.ReadRune()
 		if err != nil {
@@ -189,7 +189,7 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 		}
 	}
 
-	if valType.Kind() == reflect.Pointer {
+	for valType.Kind() == reflect.Pointer {
 		valType = valType.Elem()
 	}
 
