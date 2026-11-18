@@ -27,4 +27,5 @@ var (
 	ErrTryingToDecodeMapToNonMap      = errors.New("trying to decode map to non map")
 	ErrInvalidSliceType               = errors.New("invalid slice type")
 	ErrNoSpaceAfterDirective          = errors.New("no space after directive")
+	ErrInvalidTimeLayout              = errors.New("invalid time layout")
 )

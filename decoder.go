@@ -38,17 +38,11 @@ func (r *rowReader) ReadMultilineString(endString string) (string, error) {
 			return b.String(), err
 		}
 
-		/*if strings.HasPrefix(s, endString) {
-			break
-		}*/
 		if s == endString+"\n" {
 			break
 		}
 
-		_, err = b.WriteString(s)
-		if err != nil {
-			return "", err
-		}
+		b.WriteString(s)
 	}
 
 	s := b.String()
@@ -141,7 +135,8 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 		} else {
 			rec, err = dec.r.ReadRecord("")
 			if err == io.EOF {
-				return nil, nil
+				err = nil
+				break
 			} else if err != nil {
 				break
 			}
@@ -166,7 +161,7 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 				if dec.SkipNonExistentFields {
 					nextRec, err = dec.SkipCurrentBlock(uint(indent))
 					if err != nil {
-						return nil, err
+						return nil, fmt.Errorf("line %d: %w", rec.lineNumber, err)
 					}
 					continue
 				} else {

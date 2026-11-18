@@ -207,10 +207,10 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 			for _, layout := range []string{time.RFC3339Nano, time.RFC3339, time.DateOnly, time.TimeOnly} {
 				t, err := time.Parse(layout, r.Value)
 				if err == nil {
-					return t, err
+					return t, nil
 				}
 			}
-			return nil, fmt.Errorf("unsupported time layout: %s", r.Value)
+			return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrInvalidTimeLayout, r.Value)
 		}
 	case reflect.Int:
 		i, err := strconv.ParseInt(r.Value, 10, bits.UintSize)

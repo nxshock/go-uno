@@ -33,7 +33,7 @@ func TestParseRow(t *testing.T) {
 	for _, test := range tests {
 		got, err := parseRecord(test.s, "", 1)
 		assert.NoError(t, err)
-		assert.Equal(t, test.expected, *got)
+		assert.Equal(t, &test.expected, got)
 	}
 }
 
@@ -909,6 +909,7 @@ skip4= 1
 	err := dec.Decode(&got)
 	assert.ErrorIs(t, err, ErrFieldIsNotExists)
 
+	dec = NewDecoder(strings.NewReader(str))
 	dec.SkipNonExistentFields = true
 	err = dec.Decode(&got)
 	assert.NoError(t, err)
@@ -1099,4 +1100,22 @@ func TestMarshalUnmarshalMetadata(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, expected, got)
+}
+
+func TestErrInvalidTimeLayout(t *testing.T) {
+	str := "Key= 99-01-01"
+
+	s := struct{ Key time.Time }{}
+
+	err := Unmarshal([]byte(str), &s)
+	assert.ErrorIs(t, err, ErrInvalidTimeLayout)
+}
+
+func TestErrMapKeyIsNotString(t *testing.T) {
+	str := "Key:\n. 1= 2"
+
+	s := struct{ Key map[int]int }{}
+
+	err := Unmarshal([]byte(str), &s)
+	assert.ErrorIs(t, err, ErrMapKeyIsNotString)
 }
