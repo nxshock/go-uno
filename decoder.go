@@ -13,9 +13,10 @@ import (
 type Decoder struct {
 	r *rowReader
 
-	TimeLayouts           []string
-	IgnoreFieldNameCase   bool
-	SkipNonExistentFields bool
+	TimeLayouts                   []string
+	IgnoreFieldNameCase           bool
+	SkipNonExistentFields         bool
+	SkipNonExistentMetadataFields bool
 }
 
 type rowReader struct {
@@ -108,8 +109,9 @@ func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{
-		r:           &rowReader{r: bufio.NewReader(r)},
-		TimeLayouts: defaultDecoderTimeLayouts,
+		r:                             &rowReader{r: bufio.NewReader(r)},
+		TimeLayouts:                   defaultDecoderTimeLayouts,
+		SkipNonExistentMetadataFields: true,
 	}
 }
 
@@ -243,6 +245,10 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 						fieldName = strings.ToLower(fieldName)
 					}
 					if fieldName == key {
+						if (rec.Directive == directiveMetadata) != getStructFieldMetadata(field) {
+							continue
+						}
+
 						if !field.IsExported() {
 							return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExported, fieldName)
 						}
@@ -258,7 +264,7 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 						break
 					}
 				}
-				if !found {
+				if !found && !(rec.Directive == directiveMetadata && dec.SkipNonExistentMetadataFields) {
 					if dec.SkipNonExistentFields {
 						nextRec, err = dec.SkipCurrentBlock(indent)
 					} else {

@@ -26,6 +26,8 @@ func TestParseRow(t *testing.T) {
 		{s: "-key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "-key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 		{s: "n key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 		{s: "1234: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "1234", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
+
+		{s: "# key: val", expected: record{Indent: 0, Directive: directiveMetadata, ItemMarker: itemMarkerNone, Key: "key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 	}
 
 	for _, test := range tests {
@@ -1046,5 +1048,55 @@ func TestUnmarshalToNestedPointer(t *testing.T) {
 
 	err := Unmarshal([]byte(str), &got)
 	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestMarshalMetadata(t *testing.T) {
+	str := "# MetadataField: metadata value\nField: field value\n# NoMetadata: value"
+
+	type S struct {
+		MetadataField string `uno:",metadata"`
+		Field         string
+		NoMetadata    string
+	}
+
+	expected := S{MetadataField: "metadata value", Field: "field value", NoMetadata: ""}
+
+	got := S{}
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestUnmarshalMetadata(t *testing.T) {
+	expected := "# MetadataField: metadata value\nField: field value\n"
+
+	type S struct {
+		MetadataField string `uno:",metadata"`
+		Field         string
+	}
+
+	s := S{MetadataField: "metadata value", Field: "field value"}
+
+	b, err := Marshal(s)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(b))
+}
+
+func TestMarshalUnmarshalMetadata(t *testing.T) {
+	type S struct {
+		MetadataField string `uno:",metadata"`
+		Field         string
+	}
+
+	expected := S{MetadataField: "metadata value", Field: "field value"}
+
+	b, err := Marshal(expected)
+	assert.NoError(t, err)
+
+	got := S{}
+	err = Unmarshal(b, &got)
+	assert.NoError(t, err)
+
 	assert.Equal(t, expected, got)
 }

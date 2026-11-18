@@ -26,4 +26,5 @@ var (
 	ErrTryingToDecodeSliceToNonSlice  = errors.New("trying to decode slice to non slice")
 	ErrTryingToDecodeMapToNonMap      = errors.New("trying to decode map to non map")
 	ErrInvalidSliceType               = errors.New("invalid slice type")
+	ErrNoSpaceAfterDirective          = errors.New("no space after directive")
 )

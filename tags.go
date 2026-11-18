@@ -18,3 +18,7 @@ func getStructFieldName(field reflect.StructField) string {
 func getStructFieldOmitEmpty(field reflect.StructField) bool {
 	return slices.Contains(strings.Split(field.Tag.Get("uno"), ","), "omitempty")
 }
+
+func getStructFieldMetadata(field reflect.StructField) bool {
+	return slices.Contains(strings.Split(field.Tag.Get("uno"), ","), "metadata")
+}

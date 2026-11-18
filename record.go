@@ -82,6 +82,14 @@ func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
 		switch directive(ch) {
 		case directiveMetadata, directiveAssembly, directiveValidation:
 			dir = directive(ch)
+
+			afterDirective, _, err := r.ReadRune()
+			if err == io.EOF {
+				return nil, fmt.Errorf("read directive: %w", io.ErrUnexpectedEOF)
+			}
+			if afterDirective != ' ' {
+				return nil, fmt.Errorf("read directive: %s", ErrNoSpaceAfterDirective)
+			}
 		default:
 			err = r.UnreadRune()
 			if err != nil {

@@ -99,29 +99,34 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 		val = val.Elem()
 	}
 
+	directiveStr := ""
+	if field != nil && getStructFieldMetadata(*field) {
+		directiveStr = "# "
+	}
+
 	switch val.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.Float32, reflect.Float64:
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.Bool:
-		fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface())
+		fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.String:
 		str := val.Interface().(string)
 		if strings.Contains(str, "\n") {
 			mb := multilineBoundary(str)
-			fmt.Fprintf(enc.w, "%s%s:\n%s\n%v\n%s\n", prefix, fieldName, mb, str, mb)
+			fmt.Fprintf(enc.w, "%s%s%s:\n%s\n%v\n%s\n", prefix, directiveStr, fieldName, mb, str, mb)
 		} else {
 			delimiter := string(delimiterString)
 			if fieldName == "" {
 				delimiter = "-"
 			}
-			fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, delimiter, str)
+			fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, delimiter, str)
 		}
 	case reflect.Slice, reflect.Array:
-		fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
+		fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
 
 		for i := range val.Len() {
 			err := enc.encode(nil, "", val.Index(i), prefix)
@@ -131,10 +136,10 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 		}
 	case reflect.Struct:
 		if val.Type().String() == "time.Time" {
-			fmt.Fprintf(enc.w, "%s%s%s %v\n", prefix, fieldName, string(delimiterTyped), val.Interface().(time.Time).Format(time.RFC3339Nano))
+			fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface().(time.Time).Format(time.RFC3339Nano))
 			return nil
 		} else {
-			fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
+			fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
 			for field, value := range val.Fields() {
 				err := enc.encode(&field, getStructFieldName(field), value, prefix+"\t")
 				if err != nil {
@@ -143,7 +148,7 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 			}
 		}
 	case reflect.Map:
-		fmt.Fprintf(enc.w, "%s%s:\n", prefix, fieldName)
+		fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
 		keys := val.MapKeys()
 		if enc.SortMapKeys {
 			sort.Sort(sortKeys(keys))
