@@ -18,7 +18,6 @@ func TestParseRow(t *testing.T) {
 		s        string
 		expected record
 	}{
-		// test keys https://uno.mudrium.ru/uno_core/oblast_klyucha.html
 		{s: "'': val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 		{s: "key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 		{s: "n_key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n_key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
@@ -27,7 +26,12 @@ func TestParseRow(t *testing.T) {
 		{s: "n key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 		{s: "1234: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "1234", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 
+		{s: "- Key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceString, Key: "", Delimiter: delimiterNone, Value: "Key: val", lineNumber: 1}},
+		{s: "= Key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceTyped, Key: "", Delimiter: delimiterNone, Value: "Key: val", lineNumber: 1}},
+
 		{s: "# key: val", expected: record{Indent: 0, Directive: directiveMetadata, ItemMarker: itemMarkerNone, Key: "key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
+
+		{s: ".", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerMap, Key: "", Delimiter: delimiterNone, Value: "", lineNumber: 1}},
 	}
 
 	for _, test := range tests {
@@ -1118,4 +1122,98 @@ func TestErrMapKeyIsNotString(t *testing.T) {
 
 	err := Unmarshal([]byte(str), &s)
 	assert.ErrorIs(t, err, ErrMapKeyIsNotString)
+}
+
+func TestUnmarshalToPointerToStruct(t *testing.T) {
+	type Nested2 struct {
+		Key string
+	}
+
+	type Nested1 struct {
+		Nested2 *Nested2
+	}
+
+	type S struct {
+		Nested1 *Nested1
+	}
+
+	str := "Nested1:\n\tNested2:\n\t\tKey: value"
+	expected := S{Nested1: &Nested1{&Nested2{Key: "value"}}}
+
+	got := S{}
+
+	// log.Println(reflect.ValueOf(got).FieldByName("Nested").Type().Elem().Kind())
+
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestMarshalSliceOfObjects(t *testing.T) {
+	type Object struct {
+		Key1 string
+		Key2 int
+	}
+
+	type S struct {
+		Objects []Object
+	}
+
+	s := S{
+		Objects: []Object{
+			{Key1: "1", Key2: 2},
+			{Key1: "3", Key2: 4}}}
+
+	b, err := Marshal(s)
+	assert.NoError(t, err)
+
+	expected := "Objects:\n.\n\tKey1: 1\n\tKey2= 2\n.\n\tKey1: 3\n\tKey2= 4\n"
+	assert.Equal(t, string(b), expected)
+}
+
+func TestUnmarshalSliceOfObjects(t *testing.T) {
+	str := "Objects:\n.\n\tKey1: 1\n\tKey2= 2\n.\n\tKey1: 3\n\tKey2= 4\n"
+
+	type Object struct {
+		Key1 string
+		Key2 int
+	}
+
+	type S struct {
+		Objects []Object
+	}
+
+	expected := S{
+		Objects: []Object{
+			{Key1: "1", Key2: 2},
+			{Key1: "3", Key2: 4}}}
+
+	got := S{}
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestMarshalUnmarshalSliceOfObjects(t *testing.T) {
+	type Object struct {
+		Key1 string
+		Key2 int
+	}
+
+	type S struct {
+		Objects []Object
+	}
+
+	expected := S{
+		Objects: []Object{
+			{Key1: "1", Key2: 2},
+			{Key1: "3", Key2: 4}}}
+
+	b, err := Marshal(expected)
+	assert.NoError(t, err)
+
+	got := S{}
+	err = Unmarshal(b, &got)
+
+	assert.Equal(t, expected, got)
 }

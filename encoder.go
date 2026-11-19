@@ -139,7 +139,11 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 			fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface().(time.Time).Format(time.RFC3339Nano))
 			return nil
 		} else {
-			fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
+			if fieldName == "" {
+				fmt.Fprintf(enc.w, "%s%s.\n", prefix, directiveStr)
+			} else {
+				fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
+			}
 			for field, value := range val.Fields() {
 				err := enc.encode(&field, getStructFieldName(field), value, prefix+"\t")
 				if err != nil {

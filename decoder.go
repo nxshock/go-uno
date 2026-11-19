@@ -126,7 +126,7 @@ func (dec *Decoder) SkipCurrentBlock(indent uint) (rec *record, err error) {
 	return rec, nil
 }
 
-func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (unprocessedRow *record, err error) {
+func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (unprocessedRow *record, err error) {
 	for {
 		var rec *record
 		if nextRec != nil {
@@ -142,21 +142,20 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 			}
 		}
 
-		if slices.Contains([]reflect.Kind{reflect.Array, reflect.Map, reflect.Slice}, value.Kind()) && rec.Indent > indent && rec.ItemMarker == itemMarkerMap {
+		if slices.Contains([]reflect.Kind{reflect.Array, reflect.Map, reflect.Slice}, field.Kind()) && rec.Indent > indent && rec.ItemMarker == itemMarkerMap {
 			return nil, fmt.Errorf("line %d: %w: expected %d, got %d", rec.lineNumber, ErrInvalidIndentation, indent, rec.Indent)
 		}
 
-		if rec.Indent < indent ||
-			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Slice) || // TODO: implement mixed type arrays
-			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Map) ||
-			(rec.ItemMarker == itemMarkerNone && value.Kind() == reflect.Array) {
-
+		if rec.Indent < indent || (rec.ItemMarker == itemMarkerNone && slices.Contains([]reflect.Kind{reflect.Array, reflect.Slice, reflect.Map}, field.Kind())) { // TODO: implement mixed type arrays
 			return rec, nil
 		}
 
 		if rec.Key != "" && rec.Value == "" && rec.Delimiter == delimiterString {
 			// New field with types: struct, array, map, multiline string
-			field := value.FieldByName(rec.Key)
+
+			field = createAndGetField(field)
+
+			field := field.FieldByName(rec.Key)
 			if !field.IsValid() {
 				if dec.SkipNonExistentFields {
 					nextRec, err = dec.SkipCurrentBlock(uint(indent))
@@ -187,7 +186,7 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 
 			switch nextRec.ItemMarker {
 			case itemMarkerMap:
-				if field.Kind() != reflect.Map {
+				if field.Kind() != reflect.Map && nextRec.Key != "" {
 					return nil, fmt.Errorf("line %d: %w: %s", nextRec.lineNumber, ErrTryingToDecodeMapToNonMap, field.Type().Name())
 				}
 
@@ -230,9 +229,11 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 		} else if rec.Key != "" && rec.Value != "" {
 			// New field with simple value
 
-			if value.Kind() == reflect.Struct {
+			field = createAndGetField(field)
+
+			if field.Kind() == reflect.Struct {
 				found := false
-				for field, value := range value.Fields() {
+				for field, value := range field.Fields() {
 					key := rec.Key
 					fieldName := getStructFieldName(field)
 					if dec.IgnoreFieldNameCase {
@@ -266,31 +267,45 @@ func (dec *Decoder) decode(value reflect.Value, indent uint, nextRec *record) (u
 						return nil, fmt.Errorf("line %d: %w: %s", rec.lineNumber, ErrFieldIsNotExists, rec.Key)
 					}
 				}
-			} else if value.Kind() == reflect.Map {
-				if value.Type().Key().Kind() != reflect.String {
-					return nil, fmt.Errorf("line %d: %w, got %s", rec.lineNumber, ErrMapKeyIsNotString, value.Type().Key().String())
+			} else if field.Kind() == reflect.Map {
+				if field.Type().Key().Kind() != reflect.String {
+					return nil, fmt.Errorf("line %d: %w, got %s", rec.lineNumber, ErrMapKeyIsNotString, field.Type().Key().String())
 				}
-				if value.IsNil() {
-					value.Set(reflect.MakeMap(value.Type()))
+				if field.IsNil() {
+					field.Set(reflect.MakeMap(field.Type()))
 				}
-				v, err := rec.decodeValue(value.Type().Elem())
+				v, err := rec.decodeValue(field.Type().Elem())
 				if err != nil {
 					return nil, err
 				}
-				value.SetMapIndex(reflect.ValueOf(rec.Key), reflect.ValueOf(v))
+				field.SetMapIndex(reflect.ValueOf(rec.Key), reflect.ValueOf(v))
 			}
 		} else if rec.Key == "" && rec.Value != "" {
-			v, err := rec.decodeValue(value.Type().Elem())
+			v, err := rec.decodeValue(field.Type().Elem())
 			if err != nil {
 				return nil, err
 			}
 
-			if value.Type().Elem().Kind() == reflect.Pointer {
+			if field.Type().Elem().Kind() == reflect.Pointer {
 				v = getPointer(v)
 			}
 
-			newV := reflect.Append(value, reflect.ValueOf(v))
-			value.Set(newV)
+			newV := reflect.Append(field, reflect.ValueOf(v))
+			field.Set(newV)
+		} else if rec.Key == "" && rec.Value == "" && rec.ItemMarker == itemMarkerMap {
+			if field.Kind() != reflect.Slice {
+				return nil, fmt.Errorf("line %d: %w, expected %s, got %s", rec.lineNumber, ErrInvalidParentTypeOfAnonymousObject, reflect.Slice, field.Kind())
+			}
+
+			obj := reflect.New(field.Type().Elem())
+
+			nextRec, err = dec.decode(obj, indent+1, nextRec)
+			if err != nil {
+				return nil, err
+			}
+			field.Set(reflect.Append(field, obj.Elem()))
+			continue
+
 		} else {
 			return nil, errors.New("unwknown conditions")
 		}

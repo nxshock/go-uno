@@ -111,9 +111,12 @@ func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
 	case itemMarkerSliceString, itemMarkerSliceTyped, itemMarkerMap:
 		itmMarker = itemMarker(ch)
 		ch, _, err = r.ReadRune()
-		if err != nil {
+		if err == io.EOF && ch == 0 {
+			return &record{Indent: indent, Directive: dir, ItemMarker: itmMarker, Delimiter: delimiterNone, lineNumber: lineNumber}, nil
+		} else if err != nil {
 			return nil, fmt.Errorf("read rune after item marker: %v", err)
 		}
+
 		if ch != ' ' {
 			keyBuilder.WriteRune(rune(itmMarker))
 			keyBuilder.WriteRune(ch)

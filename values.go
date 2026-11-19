@@ -50,3 +50,22 @@ func targetType(value reflect.Type) reflect.Type {
 
 	return value
 }
+
+func createAndGetField(field reflect.Value) reflect.Value {
+	// move to last pointer
+	for field.Kind() == reflect.Pointer && field.Elem().Kind() != reflect.Invalid {
+		field = field.Elem()
+	}
+
+	// if pointer to nil then init zero value
+	if field.Kind() == reflect.Pointer && field.IsNil() {
+		field.Set(reflect.New(field.Type().Elem()))
+	}
+
+	// move to non-pointer
+	if field.Kind() == reflect.Pointer {
+		field = field.Elem()
+	}
+
+	return field
+}
