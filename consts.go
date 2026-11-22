@@ -22,6 +22,7 @@ var (
 	ErrDelimiterIsNotTypedForBool         = errors.New("delimiter is not typed for bool")
 	ErrUnsupportedType                    = errors.New("unsupported type")
 	ErrInvalidMultilineStringBoundary     = errors.New("invalid multiline string boundary")
+	ErrInvalidMultilineCommentBoundary    = errors.New("invalid multiline comment boundary")
 	ErrInvalidIndentation                 = errors.New("invalid indentation")
 	ErrTryingToDecodeSliceToNonSlice      = errors.New("trying to decode slice to non slice")
 	ErrTryingToDecodeMapToNonMap          = errors.New("trying to decode map to non map")
@@ -31,3 +32,5 @@ var (
 	ErrInvalidParentTypeOfAnonymousObject = errors.New("invalid parent type of anonymous object")
 	ErrInvalidUnmarshalTargetType         = errors.New("invalid unmarshal target type")
 )
+
+const multiLineCommentBoundary = "'/"

@@ -49,6 +49,32 @@ func (r *rowReader) ReadMultilineString(endString string) (string, error) {
 	return s[:len(s)-1], nil
 }
 
+func (r *rowReader) ReadMultilineComment() (string, error) {
+	b := new(strings.Builder)
+	for {
+		s, err := r.r.ReadString('\n')
+		if err == io.EOF {
+			if s == multiLineCommentBoundary+"\n" || s == multiLineCommentBoundary {
+				break
+			} else {
+				return b.String(), io.ErrUnexpectedEOF
+			}
+		} else if err != nil {
+			return b.String(), err
+		}
+
+		if s == multiLineCommentBoundary+"\n" {
+			break
+		}
+
+		b.WriteString(s)
+	}
+
+	s := b.String()
+
+	return s[:len(s)-1], nil
+}
+
 func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 	var s string
 	for {
@@ -71,6 +97,12 @@ func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 			// skip comment row
 			if comment != "" {
 				comment = comment + "\n" + strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(s), "//"))
+			}
+			continue
+		} else if strings.HasPrefix(strings.TrimSpace(s), "/'") {
+			comment, err = r.ReadMultilineComment()
+			if err != nil {
+				return nil, newDecodeError[any](r.lineNumber, ErrInvalidMultilineCommentBoundary, "", nil, nil) // TODO: add field name
 			}
 			continue
 		}

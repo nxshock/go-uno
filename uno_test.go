@@ -366,7 +366,7 @@ Key: Value`
 	assert.Equal(t, expected, got)
 }
 
-func TestMultilineComment(t *testing.T) {
+func TestMultipleComment(t *testing.T) {
 	type S struct {
 		Key string
 	}
@@ -1290,4 +1290,21 @@ func TestInvalidFieldOfString(t *testing.T) {
 	got := Raw{}
 	err = Unmarshal([]byte(str), &got)
 	assert.ErrorIs(t, err, ErrInvalidIndentation)
+}
+
+func TestMultilineComment(t *testing.T) {
+	str := "Key1: Value1\n/'\nmulti\nline\ncomment\n'/\nKey2: Value2"
+
+	type S struct {
+		Key1 string
+		Key2 string
+	}
+
+	expected := S{Key1: "Value1", Key2: "Value2"}
+
+	got := S{}
+
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
 }
