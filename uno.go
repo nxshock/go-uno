@@ -5,6 +5,8 @@ import (
 	"os"
 )
 
+type Raw map[string]any
+
 func Unmarshal(in []byte, out any) error {
 	return NewDecoder(bytes.NewReader(in)).Decode(out)
 }

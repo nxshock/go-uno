@@ -16,12 +16,12 @@ go get github.com/nxshock/go-uno
 
 ## Usage
 
-### Simple encode/decode
+### Simple marshal/unmarshal
 
-Encode:
+Marshal:
 
 ```go
-var s = struct {
+s := struct {
 	A int
 	B string
 }{
@@ -32,16 +32,27 @@ bytes, err := uno.Marshal(s)
 fmt.Println(string(bytes)) // "A= 123\nB: 456\n"
 ```
 
-Decode:
+Unmarshal:
 
 ```go
 bytes := []byte("A= 123\nB: 456\n")
 
-var s = struct {
+s := struct {
 	A int
 	B string
 }{}
 
 err := uno.Unmarshal(bytes, &s)
-fmt.Printf("%+v", s)
+fmt.Printf("%+v", s) // {A:123 B:456}
+```
+
+### Raw unmarshal
+
+```go
+bytes := []byte("A= 123\nB:\n\tB1: 789")
+
+s := uno.Raw{}
+
+err := uno.Unmarshal(bytes, &s)
+fmt.Printf("%+v", s) // map[A:123 B:map[B1:456 B2:789]]
 ```

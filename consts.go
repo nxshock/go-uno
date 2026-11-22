@@ -29,4 +29,5 @@ var (
 	ErrNoSpaceAfterDirective              = errors.New("no space after directive")
 	ErrInvalidTimeLayout                  = errors.New("invalid time layout")
 	ErrInvalidParentTypeOfAnonymousObject = errors.New("invalid parent type of anonymous object")
+	ErrInvalidUnmarshalTargetType         = errors.New("invalid unmarshal target type")
 )

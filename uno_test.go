@@ -714,7 +714,7 @@ func TestUnmarshalMultilineString(t *testing.T) {
 		{str: "Key:\n'\nline 1\nline 2\n'", expected: S{Key: "line 1\nline 2"}, expectedErr: nil},
 		{str: "Key:\n'\nline 1\nline 2\n\n'", expected: S{Key: "line 1\nline 2\n"}, expectedErr: nil},
 
-		{str: "Key:\n'\nline 1\n''\nline 2\n'", expected: S{Key: "line 1\n''\nline 2"}, expectedErr: nil}, // TODO: valid or not valid?
+		{str: "Key:\n'\nline 1\n''\nline 2\n'", expected: S{Key: "line 1\n''\nline 2"}, expectedErr: nil}, // valid mutliline string
 
 		{str: "Key:\n''\nline 1\nline 2\n'", expected: S{Key: ""}, expectedErr: io.ErrUnexpectedEOF},
 		{str: "Key:\n'\nline 1\nline 2\n''", expected: S{Key: ""}, expectedErr: io.ErrUnexpectedEOF},
@@ -1142,8 +1142,6 @@ func TestUnmarshalToPointerToStruct(t *testing.T) {
 
 	got := S{}
 
-	// log.Println(reflect.ValueOf(got).FieldByName("Nested").Type().Elem().Kind())
-
 	err := Unmarshal([]byte(str), &got)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, got)
@@ -1216,4 +1214,80 @@ func TestMarshalUnmarshalSliceOfObjects(t *testing.T) {
 	err = Unmarshal(b, &got)
 
 	assert.Equal(t, expected, got)
+}
+
+func TestMarshalRaw(t *testing.T) {
+	expected := "MapOfObjects:\n. Obj1:\n\t. Key: value\nNestedMap:\n. NestedMapKey: NestedMapValue\nSliceString:\n- 1\n- 2\n- 3\nString: string\n"
+
+	s := Raw{
+		"String":      "string",
+		"SliceString": []string{"1", "2", "3"},
+		"MapOfObjects": Raw{
+			"Obj1": Raw{"Key": "value"}},
+		"NestedMap": Raw{
+			"NestedMapKey": "NestedMapValue"}}
+
+	b, err := Marshal(s)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(b))
+}
+
+func TestUnmarshalRaw(t *testing.T) {
+	str := "Float64= 1\nString: string\nSliceString:\n- 1\n- 2\n- 3\nSliceTyped:\n= 4\n= 5\n= 6\nMapOfObjects:\n. Obj1:\n\tKey: value\nNestedMap:\n\tFloat64Slice:\n\t= 1\n\t= 2"
+
+	expected := Raw{
+		"Float64":     "1",
+		"String":      "string",
+		"SliceString": []string{"1", "2", "3"},
+		"SliceTyped":  []string{"4", "5", "6"},
+		"MapOfObjects": Raw{
+			"Obj1": Raw{"Key": "value"}},
+		"NestedMap": Raw{
+			"Float64Slice": []string{"1", "2"}}}
+
+	gotMap := Raw{}
+
+	err := Unmarshal([]byte(str), &gotMap)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, gotMap)
+
+	gotPtr := new(Raw{})
+	err = Unmarshal([]byte(str), &gotPtr)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, *gotPtr)
+}
+
+func TestMarshalUnmarshalRaw(t *testing.T) {
+	expected := Raw{
+		"String":      "string",
+		"SliceString": []string{"1", "2", "3"},
+		"MapOfObjects": Raw{
+			"Obj1": Raw{"Key": "value"}},
+		"NestedMap": Raw{
+			"NestedMapKey": "NestedMapValue"}}
+
+	b, err := Marshal(expected)
+	assert.NoError(t, err)
+
+	got := Raw{}
+	err = Unmarshal(b, &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestInvalidFieldOfString(t *testing.T) {
+	type S struct {
+		A struct {
+			A1 string
+		}
+	}
+
+	str := "A: 123\n\tA1: 456"
+
+	err := Unmarshal([]byte(str), &S{})
+	assert.Error(t, err) // TODO: add proper error description
+
+	got := Raw{}
+	err = Unmarshal([]byte(str), &got)
+	assert.ErrorIs(t, err, ErrInvalidIndentation)
 }

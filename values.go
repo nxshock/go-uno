@@ -51,6 +51,12 @@ func targetType(value reflect.Type) reflect.Type {
 	return value
 }
 
+func getPointer(obj any) any {
+	vp := reflect.New(reflect.TypeOf(obj))
+	vp.Elem().Set(reflect.ValueOf(obj))
+	return vp.Interface()
+}
+
 func createAndGetField(field reflect.Value) reflect.Value {
 	// move to last pointer
 	for field.Kind() == reflect.Pointer && field.Elem().Kind() != reflect.Invalid {
@@ -60,6 +66,12 @@ func createAndGetField(field reflect.Value) reflect.Value {
 	// if pointer to nil then init zero value
 	if field.Kind() == reflect.Pointer && field.IsNil() {
 		field.Set(reflect.New(field.Type().Elem()))
+	}
+
+	if field.Kind() != reflect.Pointer {
+		if field.Kind() == reflect.Map && field.IsNil() {
+			field.Set(reflect.MakeMap(field.Type())) // TODO: проверить, что нигде падать не будет
+		}
 	}
 
 	// move to non-pointer

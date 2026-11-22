@@ -33,20 +33,47 @@ func (enc *Encoder) Encode(in any) error {
 		e = e.Elem()
 	}
 
-	for field, value := range e.Fields() {
-		err := enc.encode(&field, getStructFieldName(field), value, "")
-		if err != nil {
-			return err
+	switch e.Kind() {
+	case reflect.Struct:
+		for field, value := range e.Fields() {
+			err := enc.encode(&field, getStructFieldName(field), value, "")
+			if err != nil {
+				return err
+			}
+		}
+	case reflect.Map:
+		if enc.SortMapKeys {
+			keys := e.MapKeys()
+			sort.Sort(sortKeys(keys))
+
+			for _, key := range keys {
+				keyStr, ok := key.Interface().(string)
+				if !ok {
+					return fmt.Errorf("%w: %s", ErrMapKeyIsNotString, key.Type())
+				}
+
+				err := enc.encode(nil, keyStr, e.MapIndex(key), "")
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			iter := e.MapRange()
+			for iter.Next() {
+				key, ok := iter.Key().Interface().(string)
+				if !ok {
+					return fmt.Errorf("%w: %s", ErrMapKeyIsNotString, iter.Key().Type())
+				}
+
+				err := enc.encode(nil, key, iter.Value(), "")
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
 	return nil
-}
-
-func getPointer(obj any) any {
-	vp := reflect.New(reflect.TypeOf(obj))
-	vp.Elem().Set(reflect.ValueOf(obj))
-	return vp.Interface()
 }
 
 func multilineBoundary(s string) string {
@@ -104,6 +131,10 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 		directiveStr = "# "
 	}
 
+	if val.Kind() == reflect.Interface { // TODO: add proper interface handler
+		val = val.Elem()
+	}
+
 	switch val.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface())
@@ -158,7 +189,7 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 			sort.Sort(sortKeys(keys))
 		}
 		for _, key := range keys {
-			err := enc.encode(nil, key.String(), val.MapIndex(key), prefix+". ")
+			err := enc.encode(nil, key.String(), val.MapIndex(key), strings.ReplaceAll(prefix, ". ", "\t")+". ")
 			if err != nil {
 				return err
 			}
