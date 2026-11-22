@@ -510,7 +510,7 @@ func TestUnmarshalToWrongType(t *testing.T) {
 	s := 0
 
 	err := Unmarshal([]byte(""), &s)
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidUnmarshalTargetType)
 }
 
 func TestUnmarshalPointers(t *testing.T) {
@@ -1285,7 +1285,7 @@ func TestInvalidFieldOfString(t *testing.T) {
 	str := "A: 123\n\tA1: 456"
 
 	err := Unmarshal([]byte(str), &S{})
-	assert.Error(t, err) // TODO: add proper error description
+	assert.ErrorIs(t, err, ErrUnsupportedType) // TODO: add proper error description
 
 	got := Raw{}
 	err = Unmarshal([]byte(str), &got)

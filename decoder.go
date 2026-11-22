@@ -3,7 +3,6 @@ package uno
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"reflect"
 	"slices"
@@ -87,7 +86,7 @@ func (r *rowReader) ReadRecord(comment string) (rec *record, err error) {
 				}
 			}
 			if len(s) != l {
-				return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrInvalidMultilineStringBoundary, s)
+				return nil, newDecodeError[any](r.lineNumber, ErrInvalidMultilineStringBoundary, "", nil, nil) // TODO: add field name
 			}
 			return &record{multilineStringBoundary: s}, nil
 		}
@@ -146,8 +145,8 @@ func (dec *Decoder) decodeRaw(field reflect.Value, indent uint, nextRec *record,
 			return rec, nil
 		}
 
-		if rec.Indent > indent /*&& field.Kind() != reflect.Map*/ {
-			return nil, fmt.Errorf("line %d: %w, expected %d, got %d", rec.lineNumber, ErrInvalidIndentation, indent, rec.Indent)
+		if rec.Indent > indent {
+			return nil, newDecodeError(rec.lineNumber, ErrInvalidIndentation, "", indent, rec.Indent) // TODO: add field name
 		}
 
 		if slices.Contains([]itemMarker{itemMarkerSliceString, itemMarkerSliceTyped}, rec.ItemMarker) &&
@@ -171,7 +170,7 @@ func (dec *Decoder) decodeRaw(field reflect.Value, indent uint, nextRec *record,
 			if nextRec.multilineStringBoundary != "" {
 				s, err := dec.r.ReadMultilineString(nextRec.multilineStringBoundary)
 				if err != nil {
-					return nil, fmt.Errorf("line %d: %w", rec.lineNumber, err)
+					return nil, newDecodeError[any](rec.lineNumber, err, nextRec.Key, nil, nil)
 				}
 
 				field.SetMapIndex(reflect.ValueOf(rec.Key), reflect.ValueOf(s))
@@ -216,7 +215,7 @@ func (dec *Decoder) decodeRaw(field reflect.Value, indent uint, nextRec *record,
 
 			if field.Kind() == reflect.Map {
 				if field.Type().Key().Kind() != reflect.String {
-					return nil, fmt.Errorf("line %d: %w, got %s", rec.lineNumber, ErrMapKeyIsNotString, field.Type().Key().String())
+					return nil, newDecodeError(rec.lineNumber, ErrMapKeyIsNotString, rec.Key, reflect.TypeFor[string](), field.Type().Key())
 				}
 				if field.IsNil() {
 					field.Set(reflect.MakeMap(field.Type()))
@@ -243,7 +242,7 @@ func (dec *Decoder) decodeRaw(field reflect.Value, indent uint, nextRec *record,
 			field.Set(newV)
 		} else if rec.Key == "" && rec.Value == "" && rec.ItemMarker == itemMarkerMap {
 			if field.Kind() != reflect.Slice {
-				return nil, fmt.Errorf("line %d: %w, expected %s, got %s", rec.lineNumber, ErrInvalidParentTypeOfAnonymousObject, reflect.Slice, field.Kind())
+				return nil, newDecodeError(rec.lineNumber, ErrInvalidParentTypeOfAnonymousObject, "", reflect.Slice, field.Kind()) // TODO: get parend field name
 			}
 
 			obj := reflect.New(field.Type().Elem())
@@ -277,7 +276,7 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (u
 		}
 
 		if slices.Contains([]reflect.Kind{reflect.Array, reflect.Map, reflect.Slice}, field.Kind()) && rec.Indent > indent && rec.ItemMarker == itemMarkerMap {
-			return nil, fmt.Errorf("line %d: %w: expected %d, got %d", rec.lineNumber, ErrInvalidIndentation, indent, rec.Indent)
+			return nil, newDecodeError(rec.lineNumber, ErrInvalidIndentation, rec.Key, indent, rec.Indent)
 		}
 
 		if rec.Indent < indent || (rec.ItemMarker == itemMarkerNone && slices.Contains([]reflect.Kind{reflect.Array, reflect.Slice, reflect.Map}, field.Kind())) { // TODO: implement mixed type arrays
@@ -294,23 +293,23 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (u
 				if dec.SkipNonExistentFields {
 					nextRec, err = dec.SkipCurrentBlock(uint(indent))
 					if err != nil {
-						return nil, fmt.Errorf("line %d: %w", rec.lineNumber, err)
+						return nil, newDecodeError[any](rec.lineNumber, err, rec.Key, nil, nil) // TODO: add proper error.Error() format
 					}
 					continue
 				} else {
-					return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExists, rec.Key)
+					return nil, newDecodeError[any](rec.lineNumber, ErrFieldIsNotExists, rec.Key, nil, nil)
 				}
 			}
 
 			nextRec, err = dec.r.ReadRecord("")
 			if err != nil {
-				return nil, err // TODO: which kind of error can be?
+				return nil, newDecodeError[any](rec.lineNumber, err, rec.Key, nil, nil) // TODO: add proper error.Error() format
 			}
 
 			if nextRec.multilineStringBoundary != "" {
 				s, err := dec.r.ReadMultilineString(nextRec.multilineStringBoundary)
 				if err != nil {
-					return nil, fmt.Errorf("line %d: %w", rec.lineNumber, err)
+					return nil, newDecodeError[any](rec.lineNumber, err, nextRec.Key, nil, nil) // TODO: add proper error.Error() format
 				}
 
 				field.Set(reflect.ValueOf(s))
@@ -321,7 +320,7 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (u
 			switch nextRec.ItemMarker {
 			case itemMarkerMap:
 				if field.Kind() != reflect.Map && nextRec.Key != "" {
-					return nil, fmt.Errorf("line %d: %w: %s", nextRec.lineNumber, ErrTryingToDecodeMapToNonMap, field.Type().Name())
+					return nil, newDecodeError(nextRec.lineNumber, ErrTryingToDecodeMapToNonMap, nextRec.Key, reflect.Map, field.Kind())
 				}
 
 				nextRec, err = dec.decode(field, indent, nextRec)
@@ -330,10 +329,10 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (u
 				}
 			case itemMarkerSliceString:
 				if field.Kind() != reflect.Slice {
-					return nil, fmt.Errorf("line %d: %w: %s", nextRec.lineNumber, ErrTryingToDecodeSliceToNonSlice, field.Type().Name())
+					return nil, newDecodeError(nextRec.lineNumber, ErrTryingToDecodeSliceToNonSlice, rec.Key, reflect.Slice, field.Kind())
 				}
 				if targetType(field.Type().Elem()).Kind() != reflect.String {
-					return nil, fmt.Errorf("line %d: %w: expected %s, got %s", nextRec.lineNumber, ErrInvalidSliceType, reflect.String, targetType(field.Type().Elem()).Kind())
+					return nil, newDecodeError(nextRec.lineNumber, ErrInvalidSliceType, rec.Key, reflect.String, targetType(field.Type().Elem()).Kind())
 				}
 
 				nextRec, err = dec.decode(field, indent, nextRec) // TODO: implement mixed type arrays
@@ -342,10 +341,10 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (u
 				}
 			case itemMarkerSliceTyped:
 				if field.Kind() != reflect.Slice {
-					return nil, fmt.Errorf("line %d: %w: %s", nextRec.lineNumber, ErrTryingToDecodeSliceToNonSlice, field.Type().Name())
+					return nil, newDecodeError(nextRec.lineNumber, ErrTryingToDecodeSliceToNonSlice, rec.Key, reflect.Slice, field.Kind())
 				}
 				if targetType(field.Type().Elem()).Kind() == reflect.String {
-					return nil, fmt.Errorf("line %d: %w: expected non %s, got %s", nextRec.lineNumber, ErrInvalidSliceType, reflect.String, targetType(field.Type().Elem()).Kind())
+					return nil, newDecodeError(nextRec.lineNumber, ErrInvalidSliceType, rec.Key, reflect.String, targetType(field.Type().Elem()).Kind())
 				}
 
 				nextRec, err = dec.decode(field, indent, nextRec) // TODO: implement mixed type arrays
@@ -378,7 +377,7 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (u
 						}
 
 						if !field.IsExported() {
-							return nil, fmt.Errorf("line %d: %w: \"%s\"", rec.lineNumber, ErrFieldIsNotExported, fieldName)
+							return nil, newDecodeError[any](rec.lineNumber, ErrFieldIsNotExported, fieldName, nil, nil)
 						}
 
 						v, err := rec.decodeValue(field.Type)
@@ -396,12 +395,12 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (u
 					if dec.SkipNonExistentFields {
 						nextRec, err = dec.SkipCurrentBlock(indent)
 					} else {
-						return nil, fmt.Errorf("line %d: %w: %s", rec.lineNumber, ErrFieldIsNotExists, rec.Key)
+						return nil, newDecodeError[any](rec.lineNumber, ErrFieldIsNotExists, rec.Key, nil, nil)
 					}
 				}
 			} else if field.Kind() == reflect.Map {
 				if field.Type().Key().Kind() != reflect.String {
-					return nil, fmt.Errorf("line %d: %w, got %s", rec.lineNumber, ErrMapKeyIsNotString, field.Type().Key().String())
+					return nil, newDecodeError(rec.lineNumber, ErrMapKeyIsNotString, rec.Key, reflect.String, field.Type().Key().Kind())
 				}
 				if field.IsNil() {
 					field.Set(reflect.MakeMap(field.Type()))
@@ -424,7 +423,7 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, nextRec *record) (u
 			field.Set(reflect.Append(field, reflect.ValueOf(v)))
 		} else if rec.Key == "" && rec.Value == "" && rec.ItemMarker == itemMarkerMap {
 			if field.Kind() != reflect.Slice {
-				return nil, fmt.Errorf("line %d: %w, expected %s, got %s", rec.lineNumber, ErrInvalidParentTypeOfAnonymousObject, reflect.Slice, field.Kind())
+				return nil, newDecodeError(rec.lineNumber, ErrInvalidParentTypeOfAnonymousObject, "", reflect.Slice, field.Kind()) // TODO: add parent field name
 			}
 
 			obj := reflect.New(field.Type().Elem())
@@ -457,7 +456,7 @@ func (dec *Decoder) Decode(out any) (err error) {
 		}
 		fallthrough
 	default:
-		err = fmt.Errorf("%w: expected struct or uno.Raw, got %s", ErrInvalidUnmarshalTargetType, value.Type())
+		err = newDecodeError[any](0, ErrInvalidUnmarshalTargetType, "", nil, value.Type())
 	}
 
 	return err

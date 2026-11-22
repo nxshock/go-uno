@@ -42,7 +42,8 @@ s := struct {
 	B string
 }{}
 
-err := uno.Unmarshal(bytes, &s)
+err := uno.Unmarshal(bytes, &s) // err is uno.DecodeError struct with additional info like error line or expected/got values
+
 fmt.Printf("%+v", s) // {A:123 B:456}
 ```
 
