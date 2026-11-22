@@ -21,7 +21,7 @@ var (
 	ErrMapKeyIsNotString                  = errors.New("map key is not string")
 	ErrDelimiterIsNotTypedForBool         = errors.New("delimiter is not typed for bool")
 	ErrUnsupportedType                    = errors.New("unsupported type")
-	ErrInvalidMultilineStringBoundary     = errors.New("invalid multiline strng boundary")
+	ErrInvalidMultilineStringBoundary     = errors.New("invalid multiline string boundary")
 	ErrInvalidIndentation                 = errors.New("invalid indentation")
 	ErrTryingToDecodeSliceToNonSlice      = errors.New("trying to decode slice to non slice")
 	ErrTryingToDecodeMapToNonMap          = errors.New("trying to decode map to non map")
