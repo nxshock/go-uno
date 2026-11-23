@@ -52,49 +52,48 @@ type record struct {
 }
 
 func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
-	r := strings.NewReader(s)
+	var firstChar *byte
 
 	// indent
 	indent := uint(0)
-	for {
-		ch, _, err := r.ReadRune()
-		if err != nil {
-			return nil, fmt.Errorf("read ident: %v", err)
-		}
+	for len(s) > 0 && s[0] == '\t' {
+		ch := s[0]
+		s = s[1:]
+
 		if ch == '\t' {
 			indent += 1
 		} else {
-			err = r.UnreadRune()
-			if err != nil {
-				return nil, fmt.Errorf("unread ident: %v", err)
-			}
+			firstChar = &ch
 			break
 		}
 	}
 
-	// dir
+	// directive
 	dir := directiveNone
-	ch, _, err := r.ReadRune()
-	if err != nil {
-		return nil, fmt.Errorf("read directive: %v", err)
+	ch := byte(0)
+	if firstChar != nil {
+		ch = *firstChar
+		firstChar = nil
+	} else {
+		ch = s[0]
+		s = s[1:]
 	}
 	if ch != ' ' {
 		switch directive(ch) {
 		case directiveMetadata, directiveAssembly, directiveValidation:
 			dir = directive(ch)
 
-			afterDirective, _, err := r.ReadRune()
-			if err == io.EOF {
-				return nil, fmt.Errorf("read directive: %w", io.ErrUnexpectedEOF)
+			if len(s) == 0 {
+				return nil, fmt.Errorf("read directive: %v", ErrNoSpaceAfterDirective)
 			}
-			if afterDirective != ' ' {
-				return nil, fmt.Errorf("read directive: %s", ErrNoSpaceAfterDirective)
+
+			if s[0] == ' ' {
+				s = s[1:]
+			} else {
+				return nil, fmt.Errorf("read directive: %v", ErrNoSpaceAfterDirective)
 			}
 		default:
-			err = r.UnreadRune()
-			if err != nil {
-				return nil, fmt.Errorf("unread directive: %v", err)
-			}
+			firstChar = &ch
 		}
 	} else {
 		return nil, ErrSpaceInKey
@@ -103,30 +102,34 @@ func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
 	// item marker
 	var keyBuilder strings.Builder
 	itmMarker := itemMarkerNone
-	ch, _, err = r.ReadRune()
-	if err != nil {
-		return nil, fmt.Errorf("read item marker: %v", err)
+
+	if firstChar != nil {
+		ch = *firstChar
+		firstChar = nil
+	} else {
+		if len(s) == 0 {
+			return nil, io.ErrUnexpectedEOF // TODO: add proper error description
+		}
+
+		ch = s[0]
+		s = s[1:]
 	}
+
 	switch itemMarker(ch) {
 	case itemMarkerSliceString, itemMarkerSliceTyped, itemMarkerMap:
 		itmMarker = itemMarker(ch)
-		ch, _, err = r.ReadRune()
-		if err == io.EOF && ch == 0 {
+		if len(s) == 0 {
 			return &record{Indent: indent, Directive: dir, ItemMarker: itmMarker, Delimiter: delimiterNone, lineNumber: lineNumber}, nil
-		} else if err != nil {
-			return nil, fmt.Errorf("read rune after item marker: %v", err)
 		}
 
-		if ch != ' ' {
+		if s[0] != ' ' {
 			keyBuilder.WriteRune(rune(itmMarker))
-			keyBuilder.WriteRune(ch)
+			keyBuilder.WriteRune(rune(s[0]))
 			itmMarker = itemMarkerNone
 		}
+		s = s[1:]
 	default:
-		err = r.UnreadRune()
-		if err != nil {
-			return nil, fmt.Errorf("unread item marker: %v", err)
-		}
+		firstChar = &ch
 	}
 
 	// key and delim
@@ -134,25 +137,32 @@ func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
 	if itmMarker == itemMarkerNone || itmMarker == itemMarkerMap {
 		for {
 			brk := false
-			ch, _, err = r.ReadRune()
-			if err != nil {
-				return nil, fmt.Errorf("read delimiter: %v", err)
+
+			if firstChar != nil {
+				ch = *firstChar
+				firstChar = nil
+			} else {
+				ch = s[0]
+				s = s[1:]
 			}
-			switch delimiter(ch) {
+
+			switch delimiter(rune(ch)) {
 			case delimiterString, delimiterTyped:
 				delim = delimiter(ch)
-				ch, _, err := r.ReadRune()
-				if err == io.EOF {
+
+				if len(s) == 0 {
 					brk = true
-				} else if err != nil {
-					return nil, fmt.Errorf("read after delimiter: %v", err)
 				}
-				if !brk && ch != ' ' {
-					return nil, fmt.Errorf("expected space after delimiter, got %s", string(ch))
+
+				if !brk && s[0] != ' ' {
+					return nil, fmt.Errorf("expected space after delimiter, got '%s'", string(ch))
+				}
+				if len(s) > 0 {
+					s = s[1:]
 				}
 				brk = true
 			default:
-				keyBuilder.WriteString(string(ch))
+				keyBuilder.WriteByte(ch)
 			}
 
 			if brk {
@@ -169,11 +179,7 @@ func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
 	}
 
 	// value
-	b, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	value := strings.TrimSpace(string(b))
+	value := strings.TrimSpace(s)
 	if len(value) > 1 && value[0] == '\'' && value[len(value)-1] == '\'' {
 		value = value[1 : len(value)-1]
 	}
