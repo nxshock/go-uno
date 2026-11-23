@@ -486,7 +486,6 @@ func (dec *Decoder) Decode(out any) (err error) {
 			_, err = dec.decodeRaw(value, 0, nil, itemMarkerNone)
 			return err
 		}
-		fallthrough
 	default:
 		err = newDecodeError[any](0, ErrInvalidUnmarshalTargetType, "", nil, value.Type())
 	}

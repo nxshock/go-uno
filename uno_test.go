@@ -878,6 +878,18 @@ func TestDecodeFile(t *testing.T) {
 	assert.Equal(t, S{Key: "Value"}, got)
 }
 
+func TestInvalidDecodeFile(t *testing.T) {
+	type S struct {
+		Key string
+	}
+
+	got := S{}
+
+	err := DecodeFile("testdata/file_not_exists.uno", &got)
+	assert.Error(t, err)
+	assert.Equal(t, S{}, got)
+}
+
 func TestUnexportedField(t *testing.T) {
 	type S struct {
 		key string
@@ -1293,18 +1305,43 @@ func TestInvalidFieldOfString(t *testing.T) {
 }
 
 func TestMultilineComment(t *testing.T) {
-	str := "Key1: Value1\n/'\nmulti\nline\ncomment\n'/\nKey2: Value2"
-
 	type S struct {
 		Key1 string
 		Key2 string
 	}
 
-	expected := S{Key1: "Value1", Key2: "Value2"}
+	tests := []struct {
+		str           string
+		expectedValue S
+		expectedError error
+	}{
+		{str: "/'\nmulti\nline\ncomment\n'/\nKey1: Value1\nKey2: Value2", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: nil},
+		{str: "Key1: Value1\n/'\nmulti\nline\ncomment\n'/\nKey2: Value2", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: nil},
+		{str: "Key1: Value1\nKey2: Value2\n/'\nmulti\nline\ncomment\n'/", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: nil},
+		{str: "Key1: Value1\nKey2: Value2\n/'\nmulti\nline\ncomment\n", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: ErrInvalidMultilineCommentBoundary},
+	}
 
-	got := S{}
+	for _, test := range tests {
+		got := S{}
+		err := Unmarshal([]byte(test.str), &got)
+		assert.ErrorIs(t, err, test.expectedError)
+		assert.Equal(t, test.expectedValue, got)
+	}
+}
 
-	err := Unmarshal([]byte(str), &got)
-	assert.NoError(t, err)
-	assert.Equal(t, expected, got)
+func TestInvalidLines(t *testing.T) {
+	tests := []string{
+		"#",
+		"# ",
+	}
+
+	for _, test := range tests {
+		_, err := parseRecord(test, "", 1)
+		assert.Error(t, err)
+	}
+}
+
+func TestInvalidUnmarshalTarget(t *testing.T) {
+	err := Unmarshal([]byte{}, "")
+	assert.Error(t, err)
 }

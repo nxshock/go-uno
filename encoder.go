@@ -140,13 +140,8 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 		reflect.Float32, reflect.Float64,
 		reflect.Bool:
-		// fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface())
-		enc.w.Write([]byte(prefix))
-		enc.w.Write([]byte(directiveStr))
-		enc.w.Write([]byte(fieldName))
-		enc.w.Write([]byte(string(delimiterTyped)))
-		enc.w.Write([]byte(" "))
-		fmt.Fprintf(enc.w, "%v\n", val.Interface())
+
+		fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, string(delimiterTyped), val.Interface())
 	case reflect.String:
 		str := val.Interface().(string)
 		if strings.Contains(str, "\n") {
