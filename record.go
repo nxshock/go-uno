@@ -3,7 +3,6 @@ package uno
 import (
 	"encoding"
 	"fmt"
-	"io"
 	"math/bits"
 	"reflect"
 	"strconv"
@@ -14,7 +13,7 @@ import (
 type directive rune
 
 const (
-	directiveNone       = directive(' ')
+	directiveNone       = directive(0)
 	directiveMetadata   = directive('#')
 	directiveAssembly   = directive('@')
 	directiveValidation = directive('$')
@@ -23,7 +22,7 @@ const (
 type itemMarker rune
 
 const (
-	itemMarkerNone        = itemMarker(' ')
+	itemMarkerNone        = itemMarker(0)
 	itemMarkerSliceString = itemMarker('-')
 	itemMarkerSliceTyped  = itemMarker('=')
 	itemMarkerMap         = itemMarker('.')
@@ -32,7 +31,7 @@ const (
 type delimiter rune
 
 const (
-	delimiterNone   = delimiter(' ')
+	delimiterNone   = delimiter(0)
 	delimiterString = delimiter(':')
 	delimiterTyped  = delimiter('=')
 )
@@ -49,152 +48,6 @@ type record struct {
 
 	lineNumber              uint
 	multilineStringBoundary string
-}
-
-func parseRecord(s string, comment string, lineNumber uint) (*record, error) {
-	var firstChar *byte
-
-	// indent
-	indent := uint(0)
-	for len(s) > 0 && s[0] == '\t' {
-		ch := s[0]
-		s = s[1:]
-
-		if ch == '\t' {
-			indent += 1
-		} else {
-			firstChar = &ch
-			break
-		}
-	}
-
-	// directive
-	dir := directiveNone
-	ch := byte(0)
-	if firstChar != nil {
-		ch = *firstChar
-		firstChar = nil
-	} else {
-		ch = s[0]
-		s = s[1:]
-	}
-	if ch != ' ' {
-		switch directive(ch) {
-		case directiveMetadata, directiveAssembly, directiveValidation:
-			dir = directive(ch)
-
-			if len(s) == 0 {
-				return nil, fmt.Errorf("read directive: %v", ErrNoSpaceAfterDirective)
-			}
-
-			if s[0] == ' ' {
-				s = s[1:]
-			} else {
-				return nil, fmt.Errorf("read directive: %v", ErrNoSpaceAfterDirective)
-			}
-		default:
-			firstChar = &ch
-		}
-	} else {
-		return nil, ErrSpaceInKey
-	}
-
-	// item marker
-	var keyBuilder strings.Builder
-	itmMarker := itemMarkerNone
-
-	if firstChar != nil {
-		ch = *firstChar
-		firstChar = nil
-	} else {
-		if len(s) == 0 {
-			return nil, io.ErrUnexpectedEOF // TODO: add proper error description
-		}
-
-		ch = s[0]
-		s = s[1:]
-	}
-
-	switch itemMarker(ch) {
-	case itemMarkerSliceString, itemMarkerSliceTyped, itemMarkerMap:
-		itmMarker = itemMarker(ch)
-		if len(s) == 0 {
-			return &record{Indent: indent, Directive: dir, ItemMarker: itmMarker, Delimiter: delimiterNone, lineNumber: lineNumber}, nil
-		}
-
-		if s[0] != ' ' {
-			keyBuilder.WriteRune(rune(itmMarker))
-			keyBuilder.WriteRune(rune(s[0]))
-			itmMarker = itemMarkerNone
-		}
-		s = s[1:]
-	default:
-		firstChar = &ch
-	}
-
-	// key and delim
-	delim := delimiter(' ')
-	if itmMarker == itemMarkerNone || itmMarker == itemMarkerMap {
-		for {
-			brk := false
-
-			if firstChar != nil {
-				ch = *firstChar
-				firstChar = nil
-			} else {
-				ch = s[0]
-				s = s[1:]
-			}
-
-			switch delimiter(rune(ch)) {
-			case delimiterString, delimiterTyped:
-				delim = delimiter(ch)
-
-				if len(s) == 0 {
-					brk = true
-				}
-
-				if !brk && s[0] != ' ' {
-					return nil, fmt.Errorf("expected space after delimiter, got '%s'", string(ch))
-				}
-				if len(s) > 0 {
-					s = s[1:]
-				}
-				brk = true
-			default:
-				keyBuilder.WriteByte(ch)
-			}
-
-			if brk {
-				break
-			}
-		}
-	}
-	key := keyBuilder.String()
-	if strings.HasSuffix(key, " ") {
-		return nil, ErrSpaceInKey
-	}
-	if key == "''" {
-		key = ""
-	}
-
-	// value
-	value := strings.TrimSpace(s)
-	if len(value) > 1 && value[0] == '\'' && value[len(value)-1] == '\'' {
-		value = value[1 : len(value)-1]
-	}
-
-	rec := &record{
-		Indent:     indent,
-		Directive:  dir,
-		ItemMarker: itmMarker,
-		Key:        key,
-		Value:      value,
-		Delimiter:  delim,
-		Comment:    comment,
-		lineNumber: lineNumber}
-
-	return rec, nil
 }
 
 func (r *record) decodeValue(valType reflect.Type) (any, error) {
@@ -219,7 +72,7 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 					return t, nil
 				}
 			}
-			return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrInvalidTimeLayout, r.Value)
+			return nil, newDecodeError(r.lineNumber, ErrInvalidTimeLayout, r.Key, "", "")
 		}
 	case reflect.Int:
 		i, err := strconv.ParseInt(r.Value, 10, bits.UintSize)
@@ -256,7 +109,7 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 		return strconv.ParseUint(r.Value, 10, 64)
 	case reflect.Bool:
 		if r.Delimiter != delimiterTyped {
-			return false, fmt.Errorf("line %d: %w", r.lineNumber, ErrDelimiterIsNotTypedForBool)
+			return false, newDecodeError(r.lineNumber, ErrDelimiterIsNotTypedForBool, r.Key, "", "")
 		}
 
 		switch r.Value {
@@ -266,10 +119,24 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 			return false, nil
 		}
 
-		return false, fmt.Errorf("line %d: %w: \"%s\"", r.lineNumber, ErrInvalidBoolValue, r.Value)
+		return false, newDecodeError(r.lineNumber, ErrInvalidBoolValue, r.Key, "", r.Value)
 	case reflect.String:
 		return r.Value, nil
 	}
 
 	return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrUnsupportedType, valType.String())
+}
+
+func (r *record) size() uint {
+	if r == nil {
+		return 0
+	}
+
+	newLinesCount := strings.Count(r.Value, "\n")
+
+	if newLinesCount > 0 || r.multilineStringBoundary != "" {
+		return uint(newLinesCount) + 3
+	}
+
+	return 1
 }

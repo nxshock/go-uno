@@ -32,5 +32,3 @@ var (
 	ErrInvalidParentTypeOfAnonymousObject = errors.New("invalid parent type of anonymous object")
 	ErrInvalidUnmarshalTargetType         = errors.New("invalid unmarshal target type")
 )
-
-const multiLineCommentBoundary = "'/"

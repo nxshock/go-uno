@@ -68,10 +68,8 @@ func createAndGetField(field reflect.Value) reflect.Value {
 		field.Set(reflect.New(field.Type().Elem()))
 	}
 
-	if field.Kind() != reflect.Pointer {
-		if field.Kind() == reflect.Map && field.IsNil() {
-			field.Set(reflect.MakeMap(field.Type())) // TODO: проверить, что нигде падать не будет
-		}
+	if field.Kind() == reflect.Map && field.IsNil() {
+		field.Set(reflect.MakeMap(field.Type()))
 	}
 
 	// move to non-pointer

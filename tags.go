@@ -39,3 +39,13 @@ func getStructFieldMetadata(field reflect.StructField) bool {
 
 	return slices.Contains(strings.Split(tag, ","), "metadata")
 }
+
+func getStructFieldComment(field reflect.StructField) bool {
+	// prevents strings.Split() allocations
+	tag := field.Tag.Get("uno")
+	if tag == "" {
+		return false
+	}
+
+	return slices.Contains(strings.Split(tag, ","), "comment")
+}

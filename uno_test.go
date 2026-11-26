@@ -1,6 +1,8 @@
 package uno
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -25,17 +27,16 @@ func TestParseRow(t *testing.T) {
 		{s: "-key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "-key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 		{s: "n key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "n key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
 		{s: "1234: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "1234", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
-
-		{s: "- Key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceString, Key: "", Delimiter: delimiterNone, Value: "Key: val", lineNumber: 1}},
-		{s: "= Key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceTyped, Key: "", Delimiter: delimiterNone, Value: "Key: val", lineNumber: 1}},
-
+		{s: "key: ''", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "key", Delimiter: delimiterString, Value: "", lineNumber: 1}},
+		{s: "- Key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceString, Key: "", Delimiter: delimiterString, Value: "Key: val", lineNumber: 1}},
+		{s: "= Key: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceTyped, Key: "", Delimiter: delimiterTyped, Value: "Key: val", lineNumber: 1}},
 		{s: "# key: val", expected: record{Indent: 0, Directive: directiveMetadata, ItemMarker: itemMarkerNone, Key: "key", Delimiter: delimiterString, Value: "val", lineNumber: 1}},
-
 		{s: ".", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerMap, Key: "", Delimiter: delimiterNone, Value: "", lineNumber: 1}},
+		{s: "// Comment text\nkey: val", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerNone, Key: "key", Delimiter: delimiterString, Value: "val", lineNumber: 2, Comment: "Comment text"}},
 	}
 
 	for _, test := range tests {
-		got, err := parseRecord(test.s, "", 1)
+		got, err := NewDecoder(strings.NewReader(test.s)).readRecord("")
 		assert.NoError(t, err)
 		assert.Equal(t, &test.expected, got)
 	}
@@ -46,12 +47,12 @@ func TestListItem(t *testing.T) {
 		s        string
 		expected record
 	}{
-		{s: "- text", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceString, Key: "", Delimiter: delimiterNone, Value: "text", lineNumber: 1}},
-		{s: "= 129.56", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceTyped, Key: "", Delimiter: delimiterNone, Value: "129.56", lineNumber: 1}},
+		{s: "- text", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceString, Key: "", Delimiter: delimiterString, Value: "text", lineNumber: 1}},
+		{s: "= 129.56", expected: record{Indent: 0, Directive: directiveNone, ItemMarker: itemMarkerSliceTyped, Key: "", Delimiter: delimiterTyped, Value: "129.56", lineNumber: 1}},
 	}
 
 	for _, test := range tests {
-		got, err := parseRecord(test.s, "", 1)
+		got, err := NewDecoder(strings.NewReader(test.s)).readRecord("")
 		assert.NoError(t, err)
 		assert.Equal(t, test.expected, *got)
 	}
@@ -69,7 +70,7 @@ func TestParseString(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		row, err := parseRecord(test.s, "", 1)
+		row, err := NewDecoder(strings.NewReader(test.s)).readRecord("")
 		assert.NoError(t, err)
 		v, err := row.decodeValue(reflect.TypeFor[string]())
 		assert.Equal(t, test.expected, v)
@@ -93,7 +94,7 @@ func TestParseBool(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		row, err := parseRecord(test.s, "", 1)
+		row, err := NewDecoder(strings.NewReader(test.s)).readRecord("")
 		assert.NoError(t, err)
 		v, err := row.decodeValue(reflect.TypeOf(false))
 		assert.NoError(t, err)
@@ -119,7 +120,7 @@ func TestParseFloat64(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		row, err := parseRecord(test.s, "", 1)
+		row, err := NewDecoder(strings.NewReader(test.s)).readRecord("")
 		assert.NoError(t, err)
 		v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 		assert.NoError(t, err)
@@ -135,14 +136,14 @@ func TestParseFloat64(t *testing.T) {
 	}
 
 	for _, test := range infTests {
-		row, err := parseRecord(test.s, "", 1)
+		row, err := NewDecoder(strings.NewReader(test.s)).readRecord("")
 		assert.NoError(t, err)
 		v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 		assert.NoError(t, err)
 		assert.True(t, math.IsInf(v.(float64), test.sign))
 	}
 
-	row, err := parseRecord("key= nan", "", 1)
+	row, err := NewDecoder(strings.NewReader("key= nan")).readRecord("")
 	assert.NoError(t, err)
 	v, err := row.decodeValue(reflect.TypeOf(float64(0)))
 	assert.NoError(t, err)
@@ -150,7 +151,7 @@ func TestParseFloat64(t *testing.T) {
 }
 
 func TestParseObject(t *testing.T) {
-	s := "object:"
+	s := "object:\n"
 	expected := record{
 		Indent:     0,
 		Directive:  directiveNone,
@@ -160,7 +161,7 @@ func TestParseObject(t *testing.T) {
 		Value:      "",
 		lineNumber: 1}
 
-	row, err := parseRecord(s, "", 1)
+	row, err := NewDecoder(strings.NewReader(s)).readRecord("")
 	assert.NoError(t, err)
 	assert.Equal(t, expected, *row)
 }
@@ -225,45 +226,106 @@ Time= 2006-05-04T03:02:01Z
 
 func TestMarshalUnmarshal(t *testing.T) {
 	type S struct {
-		Int     int
-		Int8    int8
-		Int16   int16
-		Int32   int32
-		Int64   int64
-		Uint    uint
-		Uint8   uint8
-		Uint16  uint16
-		Uint32  uint32
-		Uint64  uint64
-		Float32 float32
-		Float64 float64
-		Bool    bool
-		String  string
-		Time    time.Time
+		Int           int
+		Int8          int8
+		Int16         int16
+		Int32         int32
+		Int64         int64
+		Uint          uint
+		Uint8         uint8
+		Uint16        uint16
+		Uint32        uint32
+		Uint64        uint64
+		Float32       float32
+		Float64       float64
+		Bool          bool
+		String        string
+		Time          time.Time
+		SliceOfString []string
+		SliceOfInt    []int
+		Map           map[string]string
 	}
 
 	s := S{
-		Int:     -1,
-		Int8:    -2,
-		Int16:   -3,
-		Int32:   -4,
-		Int64:   -5,
-		Uint:    6,
-		Uint8:   7,
-		Uint16:  8,
-		Uint32:  9,
-		Uint64:  10,
-		Float32: -0.11,
-		Float64: -0.12,
-		Bool:    true,
-		String:  "string",
-		Time:    time.Date(2006, 5, 4, 3, 2, 1, 0, time.UTC)}
+		Int:           -1,
+		Int8:          -2,
+		Int16:         -3,
+		Int32:         -4,
+		Int64:         -5,
+		Uint:          6,
+		Uint8:         7,
+		Uint16:        8,
+		Uint32:        9,
+		Uint64:        10,
+		Float32:       -0.11,
+		Float64:       -0.12,
+		Bool:          true,
+		String:        "string",
+		Time:          time.Date(2006, 5, 4, 3, 2, 1, 0, time.UTC),
+		SliceOfString: []string{"val1", "val2", "val3"},
+		SliceOfInt:    []int{1, 2, 3, 4, 5, 6, 7, 8, 9},
+		Map:           map[string]string{"k1": "v1", "k2": "v2", "k3": "v3"},
+	}
 
 	b, err := Marshal(s)
 	assert.NoError(t, err)
 
 	newS := S{}
 	err = Unmarshal(b, &newS)
+	assert.NoError(t, err)
+	assert.Equal(t, s, newS)
+}
+
+func TestMarshalSliceOfMaps(t *testing.T) {
+	type S struct {
+		Maps []map[string]string
+	}
+
+	expected := `Maps:
+.
+	k1: v1
+.
+	k2: v2
+`
+
+	s := S{Maps: []map[string]string{{"k1": "v1"}, {"k2": "v2"}}}
+
+	got, err := Marshal(s)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(got))
+}
+
+func TestUnmarshalSliceOfMaps(t *testing.T) {
+	type S struct {
+		Maps []map[string]string
+	}
+
+	str := `Maps:
+.
+	k1: v1
+.
+	k2: v2
+`
+
+	expected := S{Maps: []map[string]string{{"k1": "v1"}, {"k2": "v2"}}}
+	got := S{}
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestMarshalUnmarshalMapSlice(t *testing.T) {
+	s := Raw{"Map": []Raw{{"k1": "v1"}, {"k2": "v2"}, {"k3": "v3"}}}
+
+	var buf bytes.Buffer
+	enc := NewEncoder(&buf)
+	enc.SortMapKeys = false
+
+	err := enc.Encode(s)
+	assert.NoError(t, err)
+
+	newS := Raw{}
+	err = Unmarshal(buf.Bytes(), &newS)
 	assert.NoError(t, err)
 	assert.Equal(t, s, newS)
 }
@@ -352,11 +414,12 @@ func TestMarshalStruct(t *testing.T) {
 
 func TestComment(t *testing.T) {
 	type S struct {
+		C string `uno:",comment"`
+
 		Key string
 	}
 
-	str := `// Comment line
-Key: Value`
+	str := "// Comment line\nKey: Value"
 
 	expected := S{Key: "Value"}
 
@@ -371,9 +434,7 @@ func TestMultipleComment(t *testing.T) {
 		Key string
 	}
 
-	str := `// Comment line 1
-// Comment line 2
-Key: Value`
+	str := "// Comment line 1\n// Comment line 2\nKey: Value"
 
 	expected := S{Key: "Value"}
 
@@ -623,7 +684,7 @@ func TestDontAllowSpaceInKeys(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		_, err := parseRecord(test.s, "", 1)
+		_, err := NewDecoder(strings.NewReader(test.s)).readRecord("")
 		assert.ErrorIs(t, err, test.expectedErr)
 	}
 }
@@ -670,13 +731,22 @@ func TestErrLineNumbers(t *testing.T) {
 		F2 bool
 	}
 
-	str := `F1: value1
-F2: true`
+	tests := []struct {
+		s        string
+		expected uint
+	}{
+		{s: "F1: value1\nF2: true", expected: 2},
+		{s: "F1: value1\n// Comment\nF2: true", expected: 3},
+		{s: "F1: value1\n/'\nComment line 1\n\nComment line 2\n'/\nF2: true", expected: 7},
+		{s: "F1:\n'\nline1\n'\nF2: true", expected: 5},
+	}
 
-	s := S{}
-	err := Unmarshal([]byte(str), &s)
-	assert.ErrorIs(t, err, ErrDelimiterIsNotTypedForBool)
-	assert.True(t, strings.HasPrefix(err.Error(), "line 2: "))
+	for _, test := range tests {
+		s := S{}
+		err := Unmarshal([]byte(test.s), &s)
+		assert.ErrorIs(t, err, ErrDelimiterIsNotTypedForBool)
+		assert.Equal(t, test.expected, errors.Unwrap(err).(*DecodeError).Line)
+	}
 }
 
 func TestMarshalMultilineString(t *testing.T) {
@@ -711,13 +781,14 @@ func TestUnmarshalMultilineString(t *testing.T) {
 		expected    S
 		expectedErr error
 	}{
-		{str: "Key:\n'\nline 1\nline 2\n'", expected: S{Key: "line 1\nline 2"}, expectedErr: nil},
-		{str: "Key:\n'\nline 1\nline 2\n\n'", expected: S{Key: "line 1\nline 2\n"}, expectedErr: nil},
+		{str: "Key:\n'\nline 1\nline 2\n'\n", expected: S{Key: "line 1\nline 2"}, expectedErr: nil},
+		{str: "Key:\n'\nline 1\nline 2\n\n'\n", expected: S{Key: "line 1\nline 2\n"}, expectedErr: nil},
 
-		{str: "Key:\n'\nline 1\n''\nline 2\n'", expected: S{Key: "line 1\n''\nline 2"}, expectedErr: nil}, // valid mutliline string
+		{str: "Key:\n'\nline 1\n''\nline 2\n'\n", expected: S{Key: "line 1\n''\nline 2"}, expectedErr: nil}, // valid mutliline string
+		{str: "Key:\n'\nline 1\n''\nline 2\n'", expected: S{}, expectedErr: io.ErrUnexpectedEOF},            // no new line, must me io.ErrUnexpectedEOF
 
-		{str: "Key:\n''\nline 1\nline 2\n'", expected: S{Key: ""}, expectedErr: io.ErrUnexpectedEOF},
-		{str: "Key:\n'\nline 1\nline 2\n''", expected: S{Key: ""}, expectedErr: io.ErrUnexpectedEOF},
+		{str: "Key:\n''\nline 1\nline 2\n'\n", expected: S{Key: ""}, expectedErr: io.ErrUnexpectedEOF},
+		{str: "Key:\n'\nline 1\nline 2\n''\n", expected: S{Key: ""}, expectedErr: io.ErrUnexpectedEOF},
 	}
 
 	for _, test := range tests {
@@ -770,7 +841,7 @@ func TestUnmarshalFieldTagFieldName(t *testing.T) {
 		Field string `uno:"altFieldName"`
 	}
 
-	str := "altFieldName: value"
+	str := "altFieldName: value\n"
 
 	got := S{}
 	err := Unmarshal([]byte(str), &got)
@@ -895,7 +966,7 @@ func TestUnexportedField(t *testing.T) {
 		key string
 	}
 
-	str := `key: value`
+	str := "key: value"
 	got := S{}
 	err := Unmarshal([]byte(str), &got)
 	assert.ErrorIs(t, err, ErrFieldIsNotExported)
@@ -925,6 +996,7 @@ skip4= 1
 	err := dec.Decode(&got)
 	assert.ErrorIs(t, err, ErrFieldIsNotExists)
 
+	got = S{}
 	dec = NewDecoder(strings.NewReader(str))
 	dec.SkipNonExistentFields = true
 	err = dec.Decode(&got)
@@ -943,7 +1015,7 @@ func TestUnsupportedTypes(t *testing.T) {
 
 	tests := []any{
 		S1{},
-		S2{Key: []complex64{complex64(1)}}} // TODO: allow slices of unsupported types or not?
+		S2{Key: []complex64{complex64(1)}}}
 
 	for _, test := range tests {
 		_, err := Marshal(test)
@@ -976,6 +1048,17 @@ text
 
 	err := Unmarshal([]byte(str), &s)
 	assert.ErrorIs(t, err, ErrInvalidMultilineStringBoundary)
+}
+
+func TestInvalidMultilineCommentBoundary(t *testing.T) {
+	str := `/'a
+text
+'/`
+
+	var s struct{}
+
+	err := Unmarshal([]byte(str), &s)
+	assert.ErrorIs(t, err, ErrInvalidMultilineCommentBoundary)
 }
 
 func TestInvalidUnmarshalSliceToOtherType(t *testing.T) {
@@ -1033,7 +1116,7 @@ func TestInvalidSliceItemTypeNontStringToString(t *testing.T) {
 }
 
 func TestUnmarshalToSliceOfPointers(t *testing.T) {
-	str := "Key:\n- val1\n- val2"
+	str := "Key:\n- val1\n- val2\n"
 
 	type S struct {
 		Key []*string
@@ -1228,6 +1311,21 @@ func TestMarshalUnmarshalSliceOfObjects(t *testing.T) {
 	assert.Equal(t, expected, got)
 }
 
+func TestMarshalUnmarshalSliceOfObjectsRaw(t *testing.T) {
+	expected := Raw{
+		"Objects": []Raw{
+			{"Key1": "1", "Key2": "2"},
+			{"Key1": "3", "Key2": "4"}}}
+
+	b, err := Marshal(expected)
+	assert.NoError(t, err)
+
+	got := Raw{}
+	err = Unmarshal(b, &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
 func TestMarshalRaw(t *testing.T) {
 	expected := "MapOfObjects:\n. Obj1:\n\t. Key: value\nNestedMap:\n. NestedMapKey: NestedMapValue\nSliceString:\n- 1\n- 2\n- 3\nString: string\n"
 
@@ -1242,6 +1340,87 @@ func TestMarshalRaw(t *testing.T) {
 	b, err := Marshal(s)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, string(b))
+}
+
+func TestMarshalMapOfStructs(t *testing.T) {
+	expected := `Map:
+. Key1:
+	Key1: 1
+	Key2= 2
+. Key2:
+	Key1: 3
+	Key2= 4
+`
+
+	type Nested struct {
+		Key1 string
+		Key2 int
+	}
+
+	type S struct {
+		Map map[string]Nested
+	}
+
+	s := S{
+		Map: map[string]Nested{
+			"Key1": {Key1: "1", Key2: 2},
+			"Key2": {Key1: "3", Key2: 4}}}
+	got, err := Marshal(s)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(got))
+}
+func TestUnmarshalMapOfStructs(t *testing.T) {
+	str := `Map:
+. Key1:
+	Key1: 1
+	Key2= 2
+. Key2:
+	Key1: 3
+	Key2= 4
+`
+
+	type Nested struct {
+		Key1 string
+		Key2 int
+	}
+
+	type S struct {
+		Map map[string]Nested
+	}
+
+	expected := S{
+		Map: map[string]Nested{
+			"Key1": {Key1: "1", Key2: 2},
+			"Key2": {Key1: "3", Key2: 4}}}
+	got := S{}
+
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestMarshalUnmarshalMapOfStructs(t *testing.T) {
+	type Nested struct {
+		Key1 string
+		Key2 int
+	}
+
+	type S struct {
+		Map map[string]Nested
+	}
+
+	expected := S{
+		Map: map[string]Nested{
+			"Key1": {Key1: "1", Key2: 2},
+			"Key2": {Key1: "3", Key2: 4}}}
+
+	b, err := Marshal(expected)
+	assert.NoError(t, err)
+
+	got := S{}
+	err = Unmarshal(b, &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
 }
 
 func TestUnmarshalRaw(t *testing.T) {
@@ -1276,7 +1455,8 @@ func TestMarshalUnmarshalRaw(t *testing.T) {
 		"MapOfObjects": Raw{
 			"Obj1": Raw{"Key": "value"}},
 		"NestedMap": Raw{
-			"NestedMapKey": "NestedMapValue"}}
+			"NestedMapKey": "NestedMapValue"},
+	}
 
 	b, err := Marshal(expected)
 	assert.NoError(t, err)
@@ -1317,8 +1497,8 @@ func TestMultilineComment(t *testing.T) {
 	}{
 		{str: "/'\nmulti\nline\ncomment\n'/\nKey1: Value1\nKey2: Value2", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: nil},
 		{str: "Key1: Value1\n/'\nmulti\nline\ncomment\n'/\nKey2: Value2", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: nil},
-		{str: "Key1: Value1\nKey2: Value2\n/'\nmulti\nline\ncomment\n'/", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: nil},
-		{str: "Key1: Value1\nKey2: Value2\n/'\nmulti\nline\ncomment\n", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: ErrInvalidMultilineCommentBoundary},
+		{str: "Key1: Value1\nKey2: Value2\n/'\nmulti\nline\ncomment\n'/\n", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: nil},
+		{str: "Key1: Value1\nKey2: Value2\n/'\nmulti\nline\ncomment\n", expectedValue: S{Key1: "Value1", Key2: "Value2"}, expectedError: io.ErrUnexpectedEOF},
 	}
 
 	for _, test := range tests {
@@ -1336,7 +1516,7 @@ func TestInvalidLines(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		_, err := parseRecord(test, "", 1)
+		_, err := NewDecoder(strings.NewReader(test)).readRecord("")
 		assert.Error(t, err)
 	}
 }
@@ -1344,4 +1524,59 @@ func TestInvalidLines(t *testing.T) {
 func TestInvalidUnmarshalTarget(t *testing.T) {
 	err := Unmarshal([]byte{}, "")
 	assert.Error(t, err)
+}
+
+func TestStringTruncation(t *testing.T) {
+	str := "Strings:\n- v1 \n-  v2  \n-   v3   "
+
+	type S struct {
+		Strings []string
+	}
+
+	expected := S{Strings: []string{"v1", "v2", "v3"}}
+
+	got := S{}
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
+
+func TestInvalidMapKeyType(t *testing.T) {
+	s := struct {
+		Map map[int]string
+	}{
+		Map: map[int]string{1: "val1"}}
+
+	_, err := Marshal(s)
+	assert.Error(t, err)
+}
+
+func TestSkipBlock(t *testing.T) {
+	s := `List1:
+- 1
+- 2
+SkipList:
+- 3
+- 4
+List3:
+- 5
+- 6
+`
+
+	type S struct {
+		List1    []string
+		SkipList []string `uno:"-"`
+		List3    []string
+	}
+
+	expected := S{
+		List1: []string{"1", "2"},
+		List3: []string{"5", "6"},
+	}
+
+	got := S{}
+
+	err := Unmarshal([]byte(s), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
 }

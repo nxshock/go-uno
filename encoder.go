@@ -173,21 +173,36 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 			} else {
 				fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
 			}
+			newPrefix := strings.TrimSuffix(prefix, ". ")
 			for field, value := range val.Fields() {
-				err := enc.encode(&field, getStructFieldName(field), value, prefix+"\t")
+				err := enc.encode(&field, getStructFieldName(field), value, newPrefix+"\t")
 				if err != nil {
 					return err
 				}
 			}
 		}
 	case reflect.Map:
-		fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
+		if val.Type().Key().Kind() != reflect.String {
+			return fmt.Errorf("%w: %s", ErrMapKeyIsNotString, val.Type().Key())
+		}
+
+		if fieldName != "" {
+			fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
+		} else {
+			fmt.Fprintf(enc.w, "%s%s\n", prefix, string(itemMarkerMap))
+		}
 		keys := val.MapKeys()
 		if enc.SortMapKeys {
 			sort.Sort(sortKeys(keys))
 		}
 		for _, key := range keys {
-			err := enc.encode(nil, key.String(), val.MapIndex(key), strings.ReplaceAll(prefix, ". ", "\t")+". ")
+			newPrefix := strings.ReplaceAll(prefix, ". ", "\t")
+			if fieldName == "" {
+				newPrefix += "\t"
+			} else {
+				newPrefix += ". "
+			}
+			err := enc.encode(nil, key.String(), val.MapIndex(key), newPrefix)
 			if err != nil {
 				return err
 			}

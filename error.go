@@ -5,28 +5,28 @@ import (
 	"fmt"
 )
 
-type DecodeError[T any] struct { // TODO: limit types to interface{ uint | string }?
+type DecodeError struct {
 	Line      uint
 	Err       error
 	FieldName string
-	Expected  T
-	Got       T
+	Expected  string
+	Got       string
 }
 
-func (de *DecodeError[T]) Error() string {
+func (de *DecodeError) Error() string {
 	if errors.Is(de.Err, ErrFieldIsNotExported) || errors.Is(de.Err, ErrFieldIsNotExists) {
 		return fmt.Sprintf("line %d: %v: %s", de.Line, de.Err, de.FieldName)
 	}
 
-	return fmt.Sprintf("line %d: %v, expected %v, got %v", de.Line, de.Err, de.Expected, de.Got)
+	return fmt.Sprintf("line %d: %v, expected %s, got %s", de.Line, de.Err, de.Expected, de.Got)
 }
 
-func (de *DecodeError[T]) Unwrap() error {
+func (de *DecodeError) Unwrap() error {
 	return de.Err
 }
 
-func newDecodeError[T any](line uint, err error, fieldName string, expected T, got T) error {
-	return fmt.Errorf("%w", &DecodeError[T]{
+func newDecodeError(line uint, err error, fieldName string, expected string, got string) error {
+	return fmt.Errorf("%w", &DecodeError{
 		Line:      line,
 		Err:       err,
 		FieldName: fieldName,
