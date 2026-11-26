@@ -47,10 +47,7 @@ func (enc *Encoder) Encode(in any) error {
 			sort.Sort(sortKeys(keys))
 
 			for _, key := range keys {
-				keyStr, ok := key.Interface().(string)
-				if !ok {
-					return fmt.Errorf("%w: %s", ErrMapKeyIsNotString, key.Type())
-				}
+				keyStr := key.Interface().(string)
 
 				err := enc.encode(nil, keyStr, e.MapIndex(key), "")
 				if err != nil {
@@ -60,10 +57,7 @@ func (enc *Encoder) Encode(in any) error {
 		} else {
 			iter := e.MapRange()
 			for iter.Next() {
-				key, ok := iter.Key().Interface().(string)
-				if !ok {
-					return fmt.Errorf("%w: %s", ErrMapKeyIsNotString, iter.Key().Type())
-				}
+				key := iter.Key().Interface().(string)
 
 				err := enc.encode(nil, key, iter.Value(), "")
 				if err != nil {

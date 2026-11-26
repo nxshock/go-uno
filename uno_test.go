@@ -1580,3 +1580,22 @@ List3:
 	assert.NoError(t, err)
 	assert.Equal(t, expected, got)
 }
+
+func TestMarshalInvalidMapKeyType(t *testing.T) {
+	s := struct {
+		F1 map[int]string
+	}{}
+
+	_, err := Marshal(s)
+	assert.ErrorIs(t, err, ErrMapKeyIsNotString)
+}
+
+func TestUnmarshalMultilineStringRaw(t *testing.T) {
+	str := "Key:\n'\nLine 1\nLine 2\n'\n"
+
+	expected := Raw{"Key": "Line 1\nLine 2"}
+	got := Raw{}
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}

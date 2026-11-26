@@ -506,12 +506,7 @@ func (dec *Decoder) decodeRaw(field reflect.Value, indent uint, nextRec *record,
 			}
 
 			if nextRec.multilineStringBoundary != "" {
-				s, err := dec.scanUntil(nextRec.multilineStringBoundary, false)
-				if err != nil {
-					return nil, newDecodeError(rec.lineNumber, err, nextRec.Key, "", "")
-				}
-
-				field.SetMapIndex(reflect.ValueOf(rec.Key), reflect.ValueOf(s))
+				field.SetMapIndex(reflect.ValueOf(rec.Key), reflect.ValueOf(nextRec.Value))
 				nextRec = nil
 				continue
 			}
