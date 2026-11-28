@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"reflect"
 	"strconv"
@@ -334,8 +333,6 @@ func TestMarshalUnmarshalMapSlice(t *testing.T) {
 
 	err := enc.Encode(s)
 	assert.NoError(t, err)
-
-	log.Println(buf.String())
 
 	newS := map[string]any{}
 	err = Unmarshal(buf.Bytes(), &newS)
@@ -1428,20 +1425,17 @@ func TestMarshalUnmarshalMapOfStructs(t *testing.T) {
 }
 
 func TestUnmarshalRaw(t *testing.T) {
-	// str := "Float64= 1\nString: string\nSliceString:\n- 1\n- 2\n- 3\nSliceTyped:\n= 4\n= 5\n= 6\nMapOfObjects:\n. Obj1:\n\tKey: value\nNestedMap:\n\tFloat64Slice:\n\t= 1\n\t= 2"
-	str := "SliceString:\n- 1\n- 2\n- 3\nSliceTyped:\n= 4\n= 5\n= 6\n"
-
-	log.Println("\n" + str)
+	str := "Float64= 1\nString: string\nSliceString:\n- 1\n- 2\n- 3\nSliceTyped:\n= 4\n= 5\n= 6\nMapOfObjects:\n. Obj1:\n\tKey: value\nNestedMap:\n\tFloat64Slice:\n\t= 1\n\t= 2"
 
 	expected := map[string]any{
-		//"Float64":     "1",
-		//"String":      "string",
+		"Float64":     "1",
+		"String":      "string",
 		"SliceString": []string{"1", "2", "3"},
 		"SliceTyped":  []string{"4", "5", "6"},
-		//"MapOfObjects": map[string]any{
-		//	"Obj1": map[string]any{"Key": "value"}},
-		//"NestedMap": map[string]any{
-		//	"Float64Slice": []string{"1", "2"}},
+		"MapOfObjects": map[string]any{
+			"Obj1": map[string]any{"Key": "value"}},
+		"NestedMap": map[string]any{
+			"Float64Slice": []string{"1", "2"}},
 	}
 
 	gotMap := map[string]any{}
@@ -1463,8 +1457,6 @@ func TestMarshalUnmarshalRaw(t *testing.T) {
 
 	b, err := Marshal(expected)
 	assert.NoError(t, err)
-
-	log.Println("\n\n" + string(b))
 
 	got := map[string]any{}
 	err = Unmarshal(b, &got)
@@ -1702,4 +1694,25 @@ func TestReadmeExampleMarshalRaw(t *testing.T) {
 	err := Unmarshal(bytes, &s)
 	assert.NoError(t, err)
 	assert.Equal(t, "map[A:123 B:map[B1:456 B2:789]]", fmt.Sprintf("%+v", s))
+}
+
+func TestEmptyStruct(t *testing.T) {
+	str := `. Key1:
+	- Value 1
+	- Value 2
+. EmptyKey:
+. Key2:
+	- Value 3
+	- Value 4`
+
+	var got map[string]any
+	err := Unmarshal([]byte(str), &got)
+	assert.NoError(t, err)
+
+	expected := map[string]any{
+		"Key1":     []string{"Value 1", "Value 2"},
+		"EmptyKey": nil,
+		"Key2":     []string{"Value 3", "Value 4"},
+	}
+	assert.Equal(t, expected, got)
 }

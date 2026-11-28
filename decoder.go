@@ -319,8 +319,8 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, parentKey string, p
 			dec.useNextRecord = true
 			return nil
 		}
-		if dec.lastRecord.Indent > indent && !(parentItemMarker == itemMarkerMap && dec.lastRecord.ItemMarker == itemMarkerMap) {
-			return ErrInvalidIndentation
+		if dec.lastRecord.Indent > indent && !(parentItemMarker == itemMarkerMap && dec.lastRecord.ItemMarker == itemMarkerMap) && !(parentItemMarker == itemMarkerSliceString && dec.lastRecord.ItemMarker == itemMarkerSliceString) {
+			return newDecodeError(dec.lastRecord.lineNumber, ErrInvalidIndentation, dec.lastRecord.Key, fmt.Sprint(indent), fmt.Sprint(dec.lastRecord.Indent))
 		}
 
 		if parentItemMarker == itemMarkerNone && parentItemMarker != dec.lastRecord.ItemMarker {
@@ -351,6 +351,12 @@ func (dec *Decoder) decode(field reflect.Value, indent uint, parentKey string, p
 				err = dec.readRecord("", &dec.nextRecord)
 				if err != nil {
 					return err
+				}
+				if dec.nextRecord.Indent == dec.lastRecord.Indent && dec.nextRecord.ItemMarker == itemMarkerMap && dec.lastRecord.ItemMarker == itemMarkerMap && dec.nextRecord.Key != "" {
+					// empty value
+					field.SetMapIndex(reflect.ValueOf(dec.lastRecord.Key), reflect.Zero(reflect.TypeFor[any]()))
+					dec.useNextRecord = true
+					continue
 				}
 				if dec.nextRecord.multilineStringBoundary != "" {
 					field.SetMapIndex(reflect.ValueOf(dec.lastRecord.Key), reflect.ValueOf(dec.nextRecord.Value))
