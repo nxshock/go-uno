@@ -50,9 +50,9 @@ fmt.Printf("%+v", s) // {A:123 B:456}
 ### Raw unmarshal
 
 ```go
-bytes := []byte("A= 123\nB:\n\tB1: 789")
+bytes := []byte("A= 123\nB:\n\tB1: 456\n\tB2: 789")
 
-s := uno.Raw{}
+var s map[string]any
 
 err := uno.Unmarshal(bytes, &s)
 fmt.Printf("%+v", s) // map[A:123 B:map[B1:456 B2:789]]

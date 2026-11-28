@@ -68,12 +68,26 @@ func createAndGetField(field reflect.Value) reflect.Value {
 		field.Set(reflect.New(field.Type().Elem()))
 	}
 
+	//
+	if field.Kind() == reflect.Interface && field.Elem().Kind() == reflect.Invalid {
+		field.Set(reflect.MakeMap(reflect.TypeFor[map[string]any]()))
+	}
+	//
+
+	if field.Kind() == reflect.Interface && field.Elem().Kind() == reflect.Map && field.Elem().IsNil() {
+		field.Set(reflect.MakeMap(field.Elem().Type()))
+	}
+
 	if field.Kind() == reflect.Map && field.IsNil() {
 		field.Set(reflect.MakeMap(field.Type()))
 	}
 
 	// move to non-pointer
 	if field.Kind() == reflect.Pointer {
+		field = field.Elem()
+	}
+
+	if field.Kind() == reflect.Interface && field.Elem().Kind() != reflect.Invalid {
 		field = field.Elem()
 	}
 

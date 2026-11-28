@@ -5,10 +5,22 @@ import (
 	"os"
 )
 
-type Raw map[string]any
+type RawMessage []byte
 
-func Unmarshal(in []byte, out any) error {
-	return NewDecoder(bytes.NewReader(in)).Decode(out)
+type Marshaler interface {
+	MarshalUno() ([]byte, error)
+}
+
+type Unmarshaler interface {
+	UnmarshalUno([]byte) error
+}
+
+type MarshalerTo interface {
+	MarshalUnoTo(*Encoder) error
+}
+
+type UnmarshalerFrom interface {
+	UnmarshalUnoFrom(*Decoder) error
 }
 
 func Marshal(in any) (out []byte, err error) {
@@ -17,6 +29,10 @@ func Marshal(in any) (out []byte, err error) {
 	err = NewEncoder(buf).Encode(in)
 
 	return buf.Bytes(), err
+}
+
+func Unmarshal(in []byte, out any) error {
+	return NewDecoder(bytes.NewReader(in)).Decode(out)
 }
 
 func DecodeFile(filePath string, out any) error {

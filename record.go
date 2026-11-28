@@ -51,10 +51,14 @@ type record struct {
 }
 
 func (r *record) decodeValue(valType reflect.Type) (any, error) {
+	return decodeValue(r.Value, valType)
+}
+
+func decodeValue(s string, valType reflect.Type) (any, error) {
 	if valType.String() != "time.Time" {
 		val := reflect.New(valType).Interface()
 		if f, ok := val.(encoding.TextUnmarshaler); ok {
-			err := f.UnmarshalText([]byte(r.Value))
+			err := f.UnmarshalText([]byte(s))
 			return f, err
 		}
 	}
@@ -67,64 +71,62 @@ func (r *record) decodeValue(valType reflect.Type) (any, error) {
 	case reflect.Struct:
 		if valType.String() == "time.Time" {
 			for _, layout := range []string{time.RFC3339Nano, time.RFC3339, time.DateOnly, time.TimeOnly} {
-				t, err := time.Parse(layout, r.Value)
+				t, err := time.Parse(layout, s)
 				if err == nil {
 					return t, nil
 				}
 			}
-			return nil, newDecodeError(r.lineNumber, ErrInvalidTimeLayout, r.Key, "", "")
+			return nil, ErrInvalidTimeLayout
 		}
 	case reflect.Int:
-		i, err := strconv.ParseInt(r.Value, 10, bits.UintSize)
+		i, err := strconv.ParseInt(s, 10, bits.UintSize)
 		return int(i), err
 	case reflect.Int8:
-		i, err := strconv.ParseInt(r.Value, 10, 8)
+		i, err := strconv.ParseInt(s, 10, 8)
 		return int8(i), err
 	case reflect.Int16:
-		i, err := strconv.ParseInt(r.Value, 10, 16)
+		i, err := strconv.ParseInt(s, 10, 16)
 		return int16(i), err
 	case reflect.Int32:
-		i, err := strconv.ParseInt(r.Value, 10, 32)
+		i, err := strconv.ParseInt(s, 10, 32)
 		return int32(i), err
 	case reflect.Int64:
-		return strconv.ParseInt(r.Value, 10, 64)
+		return strconv.ParseInt(s, 10, 64)
 	case reflect.Float32:
-		f, err := strconv.ParseFloat(r.Value, 32)
+		f, err := strconv.ParseFloat(s, 32)
 		return float32(f), err
 	case reflect.Float64:
-		return strconv.ParseFloat(r.Value, 64)
+		return strconv.ParseFloat(s, 64)
 	case reflect.Uint:
-		i, err := strconv.ParseUint(r.Value, 10, bits.UintSize)
+		i, err := strconv.ParseUint(s, 10, bits.UintSize)
 		return uint(i), err
 	case reflect.Uint8:
-		u, err := strconv.ParseUint(r.Value, 10, 8)
+		u, err := strconv.ParseUint(s, 10, 8)
 		return uint8(u), err
 	case reflect.Uint16:
-		u, err := strconv.ParseUint(r.Value, 10, 16)
+		u, err := strconv.ParseUint(s, 10, 16)
 		return uint16(u), err
 	case reflect.Uint32:
-		u, err := strconv.ParseUint(r.Value, 10, 32)
+		u, err := strconv.ParseUint(s, 10, 32)
 		return uint32(u), err
 	case reflect.Uint64:
-		return strconv.ParseUint(r.Value, 10, 64)
+		return strconv.ParseUint(s, 10, 64)
 	case reflect.Bool:
-		if r.Delimiter != delimiterTyped {
-			return false, newDecodeError(r.lineNumber, ErrDelimiterIsNotTypedForBool, r.Key, "", "")
-		}
-
-		switch r.Value {
+		switch s {
 		case "true", "on", "open", "yes":
 			return true, nil
 		case "false", "off", "close", "no":
 			return false, nil
 		}
 
-		return false, newDecodeError(r.lineNumber, ErrInvalidBoolValue, r.Key, "", r.Value)
+		return false, ErrInvalidBoolValue
 	case reflect.String:
-		return r.Value, nil
+		return s, nil
+	case reflect.Interface:
+		return s, nil
 	}
 
-	return nil, fmt.Errorf("line %d: %w: %s", r.lineNumber, ErrUnsupportedType, valType.String())
+	return nil, ErrUnsupportedType
 }
 
 func (r *record) size() uint {
@@ -139,4 +141,28 @@ func (r *record) size() uint {
 	}
 
 	return 1
+}
+
+func (r *record) String() string {
+	switch r.ItemMarker {
+	case itemMarkerNone:
+		dir := iif(r.Directive != directiveNone, string(r.Directive)+" ", "")
+		key := iif(r.Key != "", r.Key, "''")
+		val := iif(r.Value != "", r.Value, "''")
+
+		return fmt.Sprintf("%s%s%s%s %v\n", strings.Repeat("\t", int(r.Indent)), dir, key, string(r.Delimiter), val)
+	case itemMarkerMap:
+		if r.Key == "" && r.Value == "" {
+			return ".\n"
+		}
+
+		key := iif(r.Key != "", r.Key, "''")
+		val := iif(r.Value != "", r.Value, "''")
+		return fmt.Sprintf("%s%s%s%s %v\n", strings.Repeat("\t", int(r.Indent)), string(r.ItemMarker), key, string(r.Delimiter), val)
+	case itemMarkerSliceString, itemMarkerSliceTyped:
+		val := iif(r.Value != "", r.Value, "''")
+		return fmt.Sprintf("%s%s %v\n", strings.Repeat("\t", int(r.Indent)), string(r.ItemMarker), val)
+	}
+
+	return ""
 }

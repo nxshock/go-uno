@@ -27,7 +27,7 @@ func NewEncoder(w io.Writer) *Encoder {
 	return &enc
 }
 
-func (enc *Encoder) Encode(in any) error {
+func (enc *Encoder) Encode(in any) (err error) {
 	e := reflect.ValueOf(in)
 	for e.Kind() == reflect.Pointer {
 		e = e.Elem()
@@ -35,10 +35,15 @@ func (enc *Encoder) Encode(in any) error {
 
 	switch e.Kind() {
 	case reflect.Struct:
+		if e.Type().String() == "time.Time" {
+			_, err = enc.w.Write([]byte(e.Interface().(time.Time).Format(enc.TimeLayout)))
+			break
+		}
+
 		for field, value := range e.Fields() {
-			err := enc.encode(&field, getStructFieldName(field), value, "")
+			err = enc.encode(&field, getStructFieldName(field), value, "")
 			if err != nil {
-				return err
+				break
 			}
 		}
 	case reflect.Map:
@@ -49,9 +54,9 @@ func (enc *Encoder) Encode(in any) error {
 			for _, key := range keys {
 				keyStr := key.Interface().(string)
 
-				err := enc.encode(nil, keyStr, e.MapIndex(key), "")
+				err := enc.encode(nil, keyStr, e.MapIndex(key), iif(e.Type() == reflect.TypeFor[map[string]any](), "", ". "))
 				if err != nil {
-					return err
+					break
 				}
 			}
 		} else {
@@ -61,13 +66,17 @@ func (enc *Encoder) Encode(in any) error {
 
 				err := enc.encode(nil, key, iter.Value(), "")
 				if err != nil {
-					return err
+					break
 				}
 			}
 		}
+	case reflect.Slice:
+		return enc.encode(nil, "", reflect.ValueOf(in), "")
+	default:
+		_, err = marshalValue(reflect.ValueOf(in), enc.w)
 	}
 
-	return nil
+	return err
 }
 
 func multilineBoundary(s string) string {
@@ -149,7 +158,9 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 			fmt.Fprintf(enc.w, "%s%s%s%s %v\n", prefix, directiveStr, fieldName, delimiter, str)
 		}
 	case reflect.Slice, reflect.Array:
-		fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
+		if fieldName != "" {
+			fmt.Fprintf(enc.w, "%s%s%s:\n", prefix, directiveStr, fieldName)
+		}
 
 		for i := range val.Len() {
 			err := enc.encode(nil, "", val.Index(i), prefix)
@@ -206,4 +217,25 @@ func (enc *Encoder) encode(field *reflect.StructField, fieldName string, val ref
 	}
 
 	return nil
+}
+
+func marshalValue(val reflect.Value, w io.Writer) (int, error) {
+	switch val.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64,
+		reflect.Bool:
+
+		return fmt.Fprint(w, val.Interface())
+	case reflect.String:
+		str := val.Interface().(string)
+		if strings.Contains(str, "\n") {
+			mb := multilineBoundary(str)
+			return fmt.Fprintf(w, "%s\n%s\n%s\n", mb, str, mb)
+		} else {
+			return w.Write([]byte(str))
+		}
+	}
+
+	return 0, fmt.Errorf("%w: %s", ErrUnsupportedType, val.Type().String())
 }
